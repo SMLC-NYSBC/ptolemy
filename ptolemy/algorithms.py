@@ -2,6 +2,7 @@
 import numpy as np
 from scipy.signal import convolve2d
 from scipy.ndimage import label
+from PoissonMixture import PoissonMixture
 
 def flood_segments(mask, search_size):
     """
@@ -13,3 +14,6 @@ def flood_segments(mask, search_size):
     objects, n_objects = label(expand, structure=np.ones((3, 3)))
     segments = orig * objects
     return segments, n_objects
+
+class PMM_SquareSeg:
+    def __init__(self, flood_segments_search_size=6, remove_unscaled_area_lt=100):

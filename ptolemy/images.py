@@ -13,7 +13,9 @@ def load_mrc(path):
 
 
 class Exposure:
-    def __init__(self, image, scale=1, operator_selections=None, boxes=None):
+    def __init__(self, image, scale=1, operator_selections=None):
+        # image is assumed to be unrotated, boxes also unrotated
+
         if np.sum(image < 0) != 0:
             image = np.copy(image)
             image[image < 0] = 0
@@ -30,16 +32,22 @@ class Exposure:
             self.image_scaled = downsample(image, self.size)
         
         self.operator_selections = operator_selections
-        self.boxes = boxes
 
-    def segment(self, search_size=6, remove_unscaled_area_lt=100):
-        model = PoissonMixture()
-        model.fit(self.image_scaled.astype(int))
-        self._mask = model.mask
+    def segment(self, segment_alg):
+        self.boxes, self.rotated_boxes, self.rot_ang_deg = segment_alg(self.image)
+        return self.boxes, self.rotated_boxes, self.rot_ang_deg
 
-        self.segments, 
+    def viz_boxes(self, rotated=False, selections=False):
+        # plt.plot image and boxes 
+        raise NotImplementedError
 
+    def viz_boxes_and_scores(self, rotated=False, selections=False):
+        # plt.plot image and boxes with nice viz
+        raise NotImplementedError
 
+    def make_crops(self):
+        # make a cropset out of the boxes
+        raise NotImplementedError
     
 
     
