@@ -3,7 +3,11 @@ import math
 
 class PointSet2D():
     def __init__(self, y, x):
-        self.x = x
+        if type(x) is list:
+            x = np.array(x)
+        if type(y) is list:
+            y = np.array(y)
+        self.x = x            
         self.y = y
 
     def area(self):
