@@ -63,3 +63,7 @@ def get_boxes_from_angle(image, polygons, degrees):
         
     return boxes, rotated_boxes, rotated_image
 
+def get_centroids_for_polygons(polygons):
+    centroids = np.stack([poly.center_of_mass() for poly in polygons], axis=0)
+    centroids = PointSet2D(centroids[:, 0], centroids[:, 1])
+    return centroids

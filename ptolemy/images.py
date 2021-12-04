@@ -70,4 +70,26 @@ class Low_Mag_Exposure:
         scores = classifier.forward_cropset(self.crops)
         self.crops.update_scores(scores)
 
+
+class Medium_Mag_Exposure:
+    def __init__(self, image, operator_selections=None):
+        self.image = image
+        self.size = image.shape
+        self.operator_selections = operator_selections
+
+    def segment(self, segment_alg):
+        self.mask = segment_alg.forward(self.image)
+    
+    def get_crops(self, postprocess_alg):
+        self.boxes, self.rotated_boxes, self.rotated_image, self.rot_ang_deg = postprocess_alg.forward(self.mask)
+
+
+    def viz_boxes(self, rotated=False, selections=False):
+        # plt.plot image and boxes 
+        raise NotImplementedError
+
+    def viz_boxes_and_scores(self, rotated=False, selections=False):
+        # plt.plot image and boxes with nice viz
+        raise NotImplementedError
+
     

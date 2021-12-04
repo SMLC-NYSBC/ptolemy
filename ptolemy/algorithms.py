@@ -2,12 +2,15 @@
 import numpy as np
 from scipy.signal import convolve2d
 from scipy.ndimage import label
+from PointSet import PointSet2D
 from PoissonMixture import PoissonMixture
 import geometry as geom
 from scipy.optimize import minimize_scalar
 import math
 from models import BasicUNet, Wrapper
 import torch
+from scipy.spatial.distance import cdist, euclidean, pdist, squareform
+
 
 
 def flood_segments(mask, search_size):
@@ -33,6 +36,31 @@ def best_rot_angle(polygons, img_shape):
         return f
 
     return minimize_scalar(get_optim_fun(polygons), bounds=(0, 90), method='bounded')['x']
+
+def grid_from_centroids(centroids, mask, shape):
+    # need to adjust to use pointset2D
+    distmat = squareform(pdist(centroids))
+    best_error = np.inf
+
+    for i in range(len(centroids)):
+        row = distmat[i]
+        topk = np.argpartition(row, np.min(len(row), 6))[:6]
+        for j in topk:
+            if i == j:
+                continue
+            gen_mask = squarify(generate_gauss_gp([centroids[i][0], centroids[i][1], centroids[j][0], centroids[j][1]], shape))
+            err = unbalanced_error(gen_mask, mask)
+            if err < best_error:
+#                 print(err)
+#                 plt.imshow(gen_mask, cmap='Greys_r')
+#                 plt.show()
+                best_i = i
+                best_j = j
+                best_error = err
+    
+            
+    # compute error
+    return best_i, best_j, err
 
 class PMM_Segmenter:
     def __init__(self, search_size=6, remove_area_lt=100):
@@ -78,5 +106,16 @@ class UNet_Segmenter:
     
     def forward(self, image):
         results = self.model.forward_single(image)
+
+class MedMag_Process_Mask:
+    def __init__(self, seg_search_size=SETDEFAULT, ): #todo):
+        return
+
+    def forward(self, mask):
+        segments, _ = flood_segments(mask, self.seg_search_size)
+        polygons = geom.segments_to_polygons(segments)
+        centroids = geom.centroids_for_polygons(polygons)
         
+
+
 
