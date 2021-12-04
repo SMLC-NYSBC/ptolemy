@@ -1,9 +1,10 @@
 # Combine image w/ MRC
 import numpy as np
 from PIL import Image
-import ptolemy.mrc as mrc
+import mrc
 from algorithms import flood_segments
 import copy
+from CropSet import CropSet2D
 
 
 def load_mrc(path):
@@ -13,7 +14,7 @@ def load_mrc(path):
     return im
 
 
-class Exposure:
+class Low_Mag_Exposure:
     def __init__(self, image, scale=1, operator_selections=None):
         # image is assumed to be unrotated, boxes also unrotated
 
@@ -48,7 +49,7 @@ class Exposure:
         # plt.plot image and boxes with nice viz
         raise NotImplementedError
 
-    def get_crops(self):
+    def get_crops(self, postprocess_alg=None):
         if not hasattr(self, 'rotated_boxes'):
             raise ValueError
         crops = []
@@ -56,15 +57,17 @@ class Exposure:
             segmented_box = self.rotated_image[max(box.ymin(), 0): min(box.ymax(), self.rotated_image.shape[0]) ,
                                                max(box.xmin(), 0): min(box.xmax(), self.rotated_image.shape[1]) ]
             crops.append(segmented_box)
-        return CropSet2D(crops, self.boxes, self.rotated_boxes)
 
-    def postprocess_crops(self, postprocess_alg):
-        self.crops = postprocess_alg.forward(self)
+        crops = CropSet2D(crops, self.boxes, self.rotated_boxes)
+
+        if postprocess_alg is not None:
+            crops = postprocess_alg.forward(self, crops)
+        
+        self.crops = crops
+        return crops
 
     def score_crops(self, classifier):
-        scores = classifier.forward(self.crops)
+        scores = classifier.forward_cropset(self.crops)
         self.crops.update_scores(scores)
-        
-
 
     

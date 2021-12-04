@@ -6,7 +6,8 @@ from PoissonMixture import PoissonMixture
 import geometry as geom
 from scipy.optimize import minimize_scalar
 import math
-
+from models import BasicUNet, Wrapper
+import torch
 
 
 def flood_segments(mask, search_size):
@@ -61,11 +62,21 @@ class LowMag_Process_Crops:
         intensities = intensities[intensities != 0]
         return np.mean(intensities), np.std(intensities)
     
-    def forward(self, exposure):
-        crops = exposure.get_crops()
-        crops.pad(width=self.width)
+    def forward(self, exposure, crops):
+        crops.reshape(width=self.width)
         if self.normalize:
             mean, std = self.intensity_mean_std(self, exposure)
         crops.normalize(mean, std)
         return crops
+
+
+class UNet_Segmenter:
+    def __init__(self, channels, layers, model_path, threshold=0.0001):
+        model = BasicUNet(channels, layers)
+        model.load_state_dict(torch.load(model_path))
+        self.model = Wrapper(model)
+    
+    def forward(self, image):
+        results = self.model.forward_single(image)
+        
 
