@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import math
 
 class PointSet2D():
@@ -65,3 +66,25 @@ class PointSet2D():
         x = [self.xmin(), self.xmin(), self.xmax(), self.xmax()]
         
         return PointSet2D(y, x)
+
+    def as_matrix(self):
+        return np.stack((self.y, self.x), axis=1)
+
+    def bound_pts(self, ymin, xmin, ymax, xmax):
+        return_y = []
+        return_x = []
+        for y, x in zip(self.y, self.x):
+            if x < xmax and y < ymax and x > xmin and y > ymin:
+                return_y.append(y)
+                return_x.append(x)
+            
+        return PointSet2D(return_y, return_x)
+
+    def bound_pts_imshape(self, shape):
+        return self.bound_pts(0, 0, shape[0], shape[1])
+
+    @staticmethod
+    def concatenate(list_of_pointsets):
+        new = np.concatenate([ps.as_matrix() for ps in list_of_pointsets], axis=0)
+        return PointSet2D(new[:, 0], new[:, 1])
+        
