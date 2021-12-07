@@ -27,9 +27,6 @@ class LowMag_32x4_240inp(nn.Module):
         x = self.pooling(self.activation(self.bn3(self.layer3(x))))
         x = self.pooling(self.activation(self.bn4(self.layer4(x))))
         x = self.linear(x)
-        # x = self.pooling(self.bn5(self.activation(self.layer5(x))))
-        # x = self.pooling(self.bn6(self.activation(self.layer6(x))))
-        # x = self.output(x.reshape(-1, 128))
         return x
 
 class Wrapper:
@@ -134,3 +131,40 @@ class UpBlock(nn.Module):
         x = F.interpolate(x, size=(skip.size(2), skip.size(3)), mode=self.upsample_mode)
         x = torch.cat([x, skip], 1)
         return self.activ(self.conv(x))
+
+class AveragePoolModel(nn.Module):
+    def __init__(self, n_layers, n_filters):
+        super(AveragePoolModel, self).__init__()
+        self.convs = nn.ModuleList()
+        self.convs.append(nn.Conv2d(1, n_filters, 5, 1, bias=False))
+        self.bns = nn.ModuleList()
+        self.bns.append(nn.BatchNorm2d(n_filters))
+        
+        for _ in range(1, n_layers):
+            self.convs.append(nn.Conv2d(n_filters, n_filters, 3, 1, bias=False))
+            self.bns.append(nn.BatchNorm2d(n_filters))
+        
+        self.pooling = nn.MaxPool2d(3, 2, padding=0)
+        self.activation = nn.ReLU()
+        
+        self.final = nn.Linear(n_filters, 1)
+        
+    def forward(self, x, shape):
+        results = []
+        for img, this_shape in zip(x, shape):
+            result = self.forward_cropped(self.crop(img, this_shape))
+            results.append(result)
+            
+        return torch.cat(results)
+            
+    def crop(self, x, shape):
+        return x[:shape[0], :shape[1]]
+        
+    def forward_cropped(self, x):
+        x = x.unsqueeze(0)
+        for conv, bn in zip(self.convs, self.bns):
+            x = self.pooling(self.activation(bn(conv(x))))
+            
+        x = torch.mean(x, [2, 3])
+        output = self.final(x).squeeze(0)
+        return output
