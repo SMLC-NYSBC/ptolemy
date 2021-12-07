@@ -9,7 +9,7 @@ class CropSet:
         self.boxes = boxes
         self.rotated_boxes = rotated_boxes
         # self.crop_ind = np.array(range(len(crops)))
-        self.center_coords = PointSet2D([int(np.mean(box[:, 0])) for box in self.boxes], [int(np.mean(box[:, 1])) for box in self.boxes])
+        self.center_coords = PointSet2D([int(np.mean(y)) for y in self.boxes.y], [int(np.mean(x)) for x in self.boxes.x])
         self.df = pd.DataFrame({'boxes': self.boxes, 'centers': self.center_coords})
 
     def pad(self, width):
@@ -39,10 +39,16 @@ class CropSet:
 
         self.crops = new_crops
 
-    def normalize(self, mean, std):
+    def normalize_constant(self, mean, std):
         normalized_crops = []
         for crop in self.crops:
             normalized_crops.append((crop - mean) / std)
+        self.crops = normalized_crops
+
+    def normalize(self):
+        normalized_crops = []
+        for crop in self.crops:
+            normalized_crops.append((crop - crop.mean()) / crop.std())
         self.crops = normalized_crops
     
     def update_scores(self, scores):

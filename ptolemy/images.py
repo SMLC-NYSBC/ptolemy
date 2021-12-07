@@ -44,15 +44,15 @@ class Exposure:
         # return copy.deepcopy(self.boxes), copy.deepcopy(self.rotated_boxes), copy.deepcopy(self.rotated_image), copy.deepcopy(self.rot_ang_deg)
 
     def process_mask(self, process_alg):
-        self.boxes, self.rotated_boxes, self.rotated_image, self.rot_ang_deg = process_alg.forward(self.mask)
+        self.boxes, self.rotated_boxes, self.rotated_image, self.rot_ang_deg = process_alg.forward(self.mask, self.image)
 
     def get_crops(self, crop_alg=None):
         if not hasattr(self, 'rotated_boxes'):
             raise ValueError
         crops = []
         for box in self.rotated_boxes:
-            segmented_box = self.rotated_image[max(box.ymin(), 0): min(box.ymax(), self.rotated_image.shape[0]) ,
-                                               max(box.xmin(), 0): min(box.xmax(), self.rotated_image.shape[1]) ]
+            segmented_box = self.rotated_image[int(max(box.ymin(), 0)): int(min(box.ymax(), self.rotated_image.shape[0])) ,
+                                               int(max(box.xmin(), 0)): int(min(box.xmax(), self.rotated_image.shape[1])) ]
             crops.append(segmented_box)
 
         crops = CropSet2D(crops, self.boxes, self.rotated_boxes)
@@ -63,7 +63,6 @@ class Exposure:
         self.crops = crops
         return crops
 
-
     def viz_boxes(self, rotated=False, selections=False):
         # plt.plot image and boxes 
         raise NotImplementedError
@@ -71,6 +70,10 @@ class Exposure:
     def viz_boxes_and_scores(self, rotated=False, selections=False):
         # plt.plot image and boxes with nice viz
         raise NotImplementedError
+
+    def score_crops(self, classifier):
+        scores = classifier.forward_cropset(self.crops)
+        self.crops.update_scores(scores)
 
     # def get_crops(self, postprocess_alg=None):
     #     if not hasattr(self, 'rotated_boxes'):
@@ -89,32 +92,28 @@ class Exposure:
     #     self.crops = crops
     #     return crops
 
-    def score_crops(self, classifier):
-        scores = classifier.forward_cropset(self.crops)
-        self.crops.update_scores(scores)
 
+# class Medium_Mag_Exposure:
+#     def __init__(self, image, operator_selections=None):
+#         self.image = image
+#         self.size = image.shape
+#         self.operator_selections = operator_selections
 
-class Medium_Mag_Exposure:
-    def __init__(self, image, operator_selections=None):
-        self.image = image
-        self.size = image.shape
-        self.operator_selections = operator_selections
+#     def segment(self, segment_alg):
+#         self.mask = segment_alg.forward(self.image)
 
-    def segment(self, segment_alg):
-        self.mask = segment_alg.forward(self.image)
-
-    def process_mask(self, )
+#     def process_mask(self, )
     
-    def get_crops(self, postprocess_alg):
-        self.boxes, self.rotated_boxes, self.rotated_image, self.rot_ang_deg = postprocess_alg.forward(self.mask)
+#     def get_crops(self, postprocess_alg):
+#         self.boxes, self.rotated_boxes, self.rotated_image, self.rot_ang_deg = postprocess_alg.forward(self.mask)
 
 
-    def viz_boxes(self, rotated=False, selections=False):
-        # plt.plot image and boxes 
-        raise NotImplementedError
+#     def viz_boxes(self, rotated=False, selections=False):
+#         # plt.plot image and boxes 
+#         raise NotImplementedError
 
-    def viz_boxes_and_scores(self, rotated=False, selections=False):
-        # plt.plot image and boxes with nice viz
-        raise NotImplementedError
+#     def viz_boxes_and_scores(self, rotated=False, selections=False):
+#         # plt.plot image and boxes with nice viz
+#         raise NotImplementedError
 
     

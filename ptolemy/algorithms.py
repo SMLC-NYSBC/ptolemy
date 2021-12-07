@@ -1,7 +1,7 @@
 # Contain box angle finding, lattice fitting algos, maybe some others
 import numpy as np
 from scipy.signal import convolve2d
-from scipy.ndimage import label
+from scipy.ndimage import label, rotate
 from PointSet import PointSet2D
 from PoissonMixture import PoissonMixture
 import geometry as geom
@@ -9,8 +9,7 @@ from scipy.optimize import minimize_scalar
 import math
 from models import BasicUNet, Wrapper
 import torch
-from scipy.spatial.distance import cdist, euclidean, pdist, squareform, 
-
+from scipy.spatial.distance import cdist, euclidean, pdist, squareform 
 
 
 def flood_segments(mask, search_size):
@@ -57,8 +56,9 @@ def grid_from_centroids(centroids, mask, gp_padding=15, fn_weight=10):
                 best_gps = gen_gps
                 best_angle = angle
                 best_error = err
+                best_distance = distmat[i, j]
     # compute error
-    return best_gps, best_angle
+    return best_gps, best_angle, best_distance
 
 def generate_gp(centroids, i, j, shape):
     anchor_i = [centroids.y[i], centroids.x[i]]
@@ -122,7 +122,7 @@ def gp_mask_error(gen_gps, target_mask, gp_padding, fn_weight):
     return (fn_weight * np.sum(fn ** 2)) + np.sum(fp ** 2)
 
 
-class PMM_Segmenter:
+class PMM_Segment:
     def __init__(self):
         self.model = PoissonMixture()
     
@@ -131,18 +131,18 @@ class PMM_Segmenter:
         mask = self.model.mask
         return mask
 
-class Low_Mag_Process_Mask:
+class LowMag_Process_Mask:
     def __init__(self, search_size=6, remove_area_lt=100):
         self.search_size = search_size
         self.remove_area_lt = remove_area_lt
 
-    def forward(self, mask):
+    def forward(self, mask, image):
         segments, _ = geom.flood_segments(mask, self.search_size)
         polygons = geom.segments_to_polygons(segments)
         polygons = [poly for poly in polygons if poly.area() > self.remove_area_lt]
-        opt_rot_degrees = best_rot_angle(polygons, mask.shape)
+        opt_rot_degrees = best_rot_angle(polygons, image.shape)
         boxes, rotated_boxes, rotated_image = geom.get_boxes_from_angle(image, polygons, opt_rot_degrees)
-        return boxes, rotated_boxes, rotated_image, opt_rot_degrees, mask
+        return boxes, rotated_boxes, rotated_image, opt_rot_degrees
 
 
 class LowMag_Process_Crops:
@@ -153,36 +153,71 @@ class LowMag_Process_Crops:
     def intensity_mean_std(self, exposure):
         intensities = (exposure.image * exposure.mask).flatten()
         intensities = intensities[intensities != 0]
-        return np.mean(intensities), np.std(intensities)
+        self.exposure_mean_intens = np.mean(intensities)
+        self.exposure_std_intens = np.std(intensities)
+        # return self.exposure_mean_intens, self.exposure_std_intens
     
     def forward(self, exposure, crops):
         crops.reshape(width=self.width)
         if self.normalize:
-            mean, std = self.intensity_mean_std(self, exposure)
-        crops.normalize(mean, std)
+            if not hasattr(self, 'exposure_mean_intens'):
+                self.intensity_mean_std(self, exposure)
+        crops.normalize_constant(self.exposure_mean_intens, self.exposure_std_intens)
         return crops
 
 
 class UNet_Segmenter:
-    def __init__(self, channels, layers, model_path, threshold=0.0001):
+    def __init__(self, channels, layers, model_path, threshold=0.0001, normalize=True):
         model = BasicUNet(channels, layers)
         model.load_state_dict(torch.load(model_path))
         self.model = Wrapper(model)
     
     def forward(self, image):
+        image = (image - image.mean()) / image.std()
         results = self.model.forward_single(image)
+        return results
 
 class MedMag_Process_Mask:
-    def __init__(self, seg_search_size=6, gp_padding=15, fn_weight=10): #todo):
+    def __init__(self, seg_search_size=6, gp_padding=15, fn_weight=10, crop_sides=30): #todo):
         self.seg_search_size = seg_search_size
         self.gp_padding = gp_padding
         self.fn_weight = fn_weight
+        self.crop_sides = crop_sides
+        # TODO: Rationalize how large to make each crop
 
-    def forward(self, mask):
+    def forward(self, mask, image):
         segments, _ = flood_segments(mask, self.seg_search_size)
         polygons = geom.segments_to_polygons(segments)
         centroids = geom.centroids_for_polygons(polygons)
-        best_gps, angle = grid_from_centroids(centroids, mask, self.gp_padding, self.fn_weight)
+        best_gps, angle, distance = grid_from_centroids(centroids, mask, self.gp_padding, self.fn_weight)
+        rotated_image = rotate(image, angle)
+
+        init_origin = image.shape // 2
+        rotated_origin = rotated_image.shape // 2
+        rotated_gps = best_gps.rotate_around_point(math.radians(angle), init_origin, rotated_origin)
+
+        boxes = []
+        rotated_boxes = []
+        crop_distance = distance // 2 - self.crop_sides
+        for center_y, center_x in zip(rotated_gps.y, rotated_gps.x):
+            rotated_box = PointSet2D([center_y - crop_distance, center_y + crop_distance],
+                                       [center_x - crop_distance, center_x + crop_distance])
+            rotated_boxes.append(rotated_box)
+            boxes.append(rotated_box.rotate_around_point(-math.radians(angle), rotated_origin, init_origin))
+
+        return boxes, rotated_boxes, rotated_image, angle
+
+class MedMag_Process_Crops:
+    def __init__(self, normalize=True):
+        self.normalize = normalize
+
+    def forward(self, exposure, crops):
+        crops.normalize()
+        return crops
+
+
+
+
 
 
 
