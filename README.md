@@ -1,2 +1,7 @@
-# ptolemy_public
-Public release of Ptolemy package for automated targeting of Cryo-EM grids
+# Ptolemy
+This repository contains source code for Ptolemy, a Python machine learning and computer vision library for automating cyro-EM data collection. The accompanying paper is available on \href{https://arxiv.org/abs/2112.01534}{Arxiv}.
+
+## Functionality
+Basic functionality is currently in place. Images are handled by the `Exposure` class in `ptolemy/images.py`, with algorithms for processing low and medium mag images in `ptolemy/algorithms`. 
+
+Model weights and tutorial coming soon. 
