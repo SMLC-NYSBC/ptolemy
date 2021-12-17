@@ -1,5 +1,5 @@
 # Contain simple geometry functions
-from PointSet import PointSet2D
+from ptolemy.PointSet import PointSet2D
 import numpy as np
 from scipy.spatial import ConvexHull
 from scipy.ndimage import rotate
@@ -11,7 +11,8 @@ import math
 def convex_hull(points):
     hull = ConvexHull(points)
     vertices = hull.vertices
-    return PointSet2D(vertices[:, 0], vertices[:, 1])
+    points = points[vertices]
+    return PointSet2D(points[:, 0], points[:, 1])
 
 
 def segments_to_polygons(segments):
@@ -19,7 +20,7 @@ def segments_to_polygons(segments):
     For each segment, returns the polygon surounding it by solving for the convex hull.
     """
 
-    n = np.max(segments)
+    n = int(np.max(segments))
     polygons = []
 
     for i in range(1, n+1):
@@ -40,9 +41,9 @@ def segments_to_polygons(segments):
 
 
 def get_boxes_from_angle(image, polygons, degrees):
-    original_origin = image.shape // 2
+    original_origin = [image.shape[0] // 2, image.shape[1] // 2]
     rotated_image = rotate(image, degrees)
-    rotated_origin = rotated_image.shape // 2
+    rotated_origin = [rotated_image.shape[0] // 2, rotated_image.shape[1] // 2]
     
     rotated_boxes = []
     boxes = []
@@ -55,10 +56,11 @@ def get_boxes_from_angle(image, polygons, degrees):
         ymin = polygon.ymin()
         ymax = polygon.ymax()
 
-        box = PointSet2D([ymin, ymax, ymax, ymin], [xmin, xmin, xmax, xmax])
+#         box = PointSet2D([ymin, ymax, ymax, ymin], [xmin, xmin, xmax, xmax])
+        box = PointSet2D([xmin, xmin, xmax, xmax], [ymin, ymax, ymax, ymin])
         rotated_boxes.append(box)
         
-        rotated_box_back = box.rotate_around_point(math.radians(-degrees, rotated_origin, original_origin))
+        rotated_box_back = box.rotate_around_point(math.radians(degrees), rotated_origin, original_origin)
         boxes.append(rotated_box_back)
         
     return boxes, rotated_boxes, rotated_image

@@ -1,16 +1,21 @@
 # Combine image w/ MRC
+from __future__ import absolute_import
+
 import numpy as np
 from PIL import Image
-import mrc
-from algorithms import flood_segments
+import ptolemy.mrc as mrc
+from ptolemy.algorithms import flood_segments
 import copy
-from CropSet import CropSet2D
+from ptolemy.CropSet import CropSet
+import matplotlib
+import matplotlib.pyplot as plt
 
 
 def load_mrc(path):
     with open(path, 'rb') as f:
         content = f.read()
     im,_,_ = mrc.parse(content)
+    im = np.copy(im)
     return im
 
 
@@ -19,7 +24,6 @@ class Exposure:
         # image is assumed to be unrotated, boxes also unrotated
 
         if np.sum(image < 0) != 0:
-            image = np.copy(image)
             image[image < 0] = 0
 
         self.image = image
@@ -51,11 +55,13 @@ class Exposure:
             raise ValueError
         crops = []
         for box in self.rotated_boxes:
-            segmented_box = self.rotated_image[int(max(box.ymin(), 0)): int(min(box.ymax(), self.rotated_image.shape[0])) ,
-                                               int(max(box.xmin(), 0)): int(min(box.xmax(), self.rotated_image.shape[1])) ]
+            segmented_box = self.rotated_image[int(max(box.xmin(), 0)): int(min(box.xmax(), self.rotated_image.shape[0])) ,
+                                               int(max(box.ymin(), 0)): int(min(box.ymax(), self.rotated_image.shape[1])) ]
+            if segmented_box.size < 100 or segmented_box.max() == segmented_box.min():
+                continue
             crops.append(segmented_box)
 
-        crops = CropSet2D(crops, self.boxes, self.rotated_boxes)
+        crops = CropSet(crops, self.boxes, self.rotated_boxes)
 
         if crop_alg is not None:
             crops = crop_alg.forward(self, crops)
@@ -64,12 +70,78 @@ class Exposure:
         return crops
 
     def viz_boxes(self, rotated=False, selections=False):
+        if selections:
+            raise NotImplementedError
+        
+        if rotated:
+            image_to_show = self.rotated_image
+            boxes_to_show = self.rotated_boxes
+        else:
+            image_to_show = self.image
+            boxes_to_show = self.boxes
+            
+        _, ax = plt.subplots(figsize=(12, 12))
+        ax.imshow(image_to_show, cmap='Greys_r')
+        patches = []
+        for box in boxes_to_show:
+            patches.append(matplotlib.patches.Polygon(box.as_matrix_y(), facecolor='None'))
+        collection = matplotlib.collections.PatchCollection(patches)
+        ax.add_collection(collection)
+        collection.set_color('r')
+        collection.set_facecolor('none')
+        collection.set_linewidth(2)
+        plt.axis('off')
+        plt.show()
         # plt.plot image and boxes 
-        raise NotImplementedError
 
     def viz_boxes_and_scores(self, rotated=False, selections=False):
         # plt.plot image and boxes with nice viz
-        raise NotImplementedError
+        if not hasattr(self, 'boxes'):
+            raise ValueError # say you haven't gotten the boxes yet
+        if 'scores' not in self.crops.df.columns:
+            raise ValueError # say you haven't scored the crops yet
+        if selections:
+            raise NotImplementedError
+        
+        if rotated:
+            image_to_show = self.rotated_image
+            boxes_to_show = self.crops.rotated_boxes
+        else:
+            image_to_show = self.image
+            boxes_to_show = self.crops.boxes
+            
+        cmap = plt.get_cmap('RdYlBu')
+        _, ax = plt.subplots(figsize=(12,12))
+        ax.imshow(image_to_show, cmap='Greys_r')
+        
+        patches = []
+        colors = []
+        
+        for box, score in zip(boxes_to_show, self.crops.df.scores):
+            patches.append(matplotlib.patches.Polygon(box.as_matrix_y(), facecolor='none'))
+            colors.append(score)
+            
+        collection = matplotlib.collections.PatchCollection(patches)
+        ax.add_collection(collection)
+        colors = np.array(colors)
+        collection.set_color(cmap(colors / np.max(colors)))
+        collection.set_facecolor('none')
+        collection.set_linewidth(2)
+        plt.axis('off')
+        plt.show()
+
+        
+    def viz_mask(self, imsize=(8, 8)):
+        plt.figure(figsize=imsize)
+        plt.imshow(self.mask, cmap='Greys_r')
+        plt.axis('off')
+        plt.show()
+        
+    def viz_image(self, imsize=(8, 8)):
+        plt.figure(figsize=imsize)
+        plt.imshow(self.image, cmap='Greys_r')
+        plt.axis('off')
+        plt.show()
 
     def score_crops(self, classifier):
         scores = classifier.forward_cropset(self.crops)

@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
-import geometry as geom
-from PointSet import PointSet2D
+import ptolemy.geometry as geom
+from ptolemy.PointSet import PointSet2D
+import matplotlib.pyplot as plt
 
 class CropSet:
     def __init__(self, crops, boxes, rotated_boxes):
@@ -9,7 +10,7 @@ class CropSet:
         self.boxes = boxes
         self.rotated_boxes = rotated_boxes
         # self.crop_ind = np.array(range(len(crops)))
-        self.center_coords = PointSet2D([int(np.mean(y)) for y in self.boxes.y], [int(np.mean(x)) for x in self.boxes.x])
+        self.center_coords = PointSet2D.concatenate([PointSet2D([int(np.mean(y)) for y in box.y], [int(np.mean(x)) for x in box.x]) for box in boxes])
         self.df = pd.DataFrame({'boxes': self.boxes, 'centers': self.center_coords})
 
     def pad(self, width):
@@ -53,6 +54,13 @@ class CropSet:
     
     def update_scores(self, scores):
         self.df['scores'] = scores
+        
+    def viz_crops(self):
+        for crop in self.crops:
+            plt.imshow(crop, cmap='Greys_r')
+            plt.axis('off')
+            plt.show()
+        
     
     
 

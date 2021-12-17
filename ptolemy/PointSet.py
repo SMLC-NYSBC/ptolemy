@@ -19,8 +19,8 @@ class PointSet2D():
     def center_of_mass(self):
         # compute center of mass of point set
         v = (self.x*np.roll(self.y, 1) - self.y*np.roll(self.x, 1))
-        cx = np.sum((self.x + np.roll(self.x, 1))*v)
-        cy = np.sum((self.y + np.roll(self.y, 1))*v)
+        cy = np.sum((self.x + np.roll(self.x, 1))*v)
+        cx = np.sum((self.y + np.roll(self.y, 1))*v)
         a = np.sum(v)
 
         return np.array([cy/3/a, cx/3/a])
@@ -31,8 +31,8 @@ class PointSet2D():
         if type(new_origin) is int:
             new_origin = [new_origin, new_origin]
 
-        adj_y = self.y - init_origin[0]
-        adj_x = self.x - init_origin[1]
+        adj_y = self.y - init_origin[1]
+        adj_x = self.x - init_origin[0]
 
         cos_rad = math.cos(radians)
         sin_rad = math.sin(radians)
@@ -67,24 +67,27 @@ class PointSet2D():
         
         return PointSet2D(y, x)
 
-    def as_matrix(self):
+    def as_matrix_y(self):
         return np.stack((self.y, self.x), axis=1)
+    
+    def as_matrix_x(self):
+        return np.stack((self.x, self.y), axis=0)
 
     def bound_pts(self, ymin, xmin, ymax, xmax):
         return_y = []
         return_x = []
         for y, x in zip(self.y, self.x):
-            if x < xmax and y < ymax and x > xmin and y > ymin:
+            if x < xmax + 100 and y < ymax + 100 and x > xmin - 100 and y > ymin - 100:
                 return_y.append(y)
                 return_x.append(x)
             
         return PointSet2D(return_y, return_x)
 
     def bound_pts_imshape(self, shape):
-        return self.bound_pts(0, 0, shape[0], shape[1])
+        return self.bound_pts(0, 0, shape[1], shape[0])
 
     @staticmethod
     def concatenate(list_of_pointsets):
-        new = np.concatenate([ps.as_matrix() for ps in list_of_pointsets], axis=0)
+        new = np.concatenate([ps.as_matrix_y() for ps in list_of_pointsets], axis=0)
         return PointSet2D(new[:, 0], new[:, 1])
         

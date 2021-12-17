@@ -4,31 +4,43 @@ import torch.nn.functional as F
 import numpy as np
 
 
-class LowMag_32x4_240inp(nn.Module):
+class LowMag_64x5_2ep(nn.Module):
     def __init__(self):
-        super(LowMag_32x4_240inp, self).__init__()
+        super(Model_64_64_64_64_64, self).__init__()
 
         self.pooling = nn.MaxPool2d(3, 2, padding=1)
         self.activation = nn.ReLU()
 
-        self.layer1 = nn.Conv2d(1, 32, 5, 1, bias=False)
-        self.bn1 = nn.BatchNorm2d(32)
-        self.layer2 = nn.Conv2d(32, 32, 5, 1, bias=False)
-        self.bn2 = nn.BatchNorm2d(32)
-        self.layer3 = nn.Conv2d(32, 32, 3, 1, bias=False)
-        self.bn3 = nn.BatchNorm2d(32)
-        self.layer4 = nn.Conv2d(32, 32, 3, 1, bias=False)
-        self.bn4 = nn.BatchNorm2d(32)
-        self.linear = nn.Conv2d(32, 1, 13, 1, padding=0)
+        self.layer1 = nn.Conv2d(1, 64, 5, 1, bias=False)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.layer2 = nn.Conv2d(64, 64, 5, 1, bias=False)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.layer3 = nn.Conv2d(64, 64, 3, 1, bias=False)
+        self.bn3 = nn.BatchNorm2d(64)
+        self.layer4 = nn.Conv2d(64, 64, 3, 1, bias=False)
+        self.bn4 = nn.BatchNorm2d(64)
+        self.layer5 = nn.Conv2d(64, 64, 3, 1, bias=False)
+        self.bn5 = nn.BatchNorm2d(64)
+        self.linear = nn.Conv2d(64, 1, 6, 1, padding=0)
+        # self.layer4 = nn.Conv2d(256, 128, 3, 1, bias=False)
+        # self.bn4 = nn.BatchNorm2d(128)
+        # self.layer5 = nn.Conv2d(128, 64, 3, 1, bias=False)
+        # self.bn5 = nn.BatchNorm2d(64)
+        # self.layer6 = nn.Conv2d(64, 32, 3, 1, bias=False)
+        # self.bn6 = nn.BatchNorm2d(32)
+        # self.output = nn.Linear(128, 1, bias=True)
     
     def forward(self, x):
-        x = self.pooling(self.activation(self.bn1(self.layer1(x))))
-        x = self.pooling(self.activation(self.bn2(self.layer2(x))))
-        x = self.pooling(self.activation(self.bn3(self.layer3(x))))
-        x = self.pooling(self.activation(self.bn4(self.layer4(x))))
+        x = self.pooling(self.bn1(self.activation(self.layer1(x))))
+        x = self.pooling(self.bn2(self.activation(self.layer2(x))))
+        x = self.pooling(self.bn3(self.activation(self.layer3(x))))
+        x = self.pooling(self.bn4(self.activation(self.layer4(x))))
+        x = self.pooling(self.bn5(self.activation(self.layer5(x))))
         x = self.linear(x)
+        # x = self.pooling(self.bn6(self.activation(self.layer6(x))))
+        # x = self.output(x.reshape(-1, 128))
         return x
-
+    
 class Wrapper:
     def __init__(self, model):
         self.model = model
@@ -54,14 +66,21 @@ class Wrapper:
         else:
             results = []
             for crop in cropset.crops:
-                results.append(self.forward_single(crop))
-            return np.concatenate(results)
+                results.append(self.forward_single_scalarout(crop))
+            return np.array(results)
 
     def forward_single(self, image):
         image = torch.tensor(image).unsqueeze(0).unsqueeze(0).float()
         if self.cuda:
             image = image.cuda()
         output = self.model.forward(image).detach().cpu().numpy()[0, 0]
+        return output
+    
+    def forward_single_scalarout(self, image):
+        image = torch.tensor(image).unsqueeze(0).unsqueeze(0).float()
+        if self.cuda:
+            image = image.cuda()
+        output = self.model.forward(image).item()
         return output
         
     def forward_batch(self, batch):
@@ -149,22 +168,29 @@ class AveragePoolModel(nn.Module):
         
         self.final = nn.Linear(n_filters, 1)
         
-    def forward(self, x, shape):
-        results = []
-        for img, this_shape in zip(x, shape):
-            result = self.forward_cropped(self.crop(img, this_shape))
-            results.append(result)
-            
-        return torch.cat(results)
-            
-    def crop(self, x, shape):
-        return x[:shape[0], :shape[1]]
-        
-    def forward_cropped(self, x):
-        x = x.unsqueeze(0)
+    def forward(self, x):
         for conv, bn in zip(self.convs, self.bns):
             x = self.pooling(self.activation(bn(conv(x))))
-            
         x = torch.mean(x, [2, 3])
         output = self.final(x).squeeze(0)
         return output
+        
+#         results = []
+        
+#         for img, this_shape in zip(x, shape):
+#             result = self.forward_cropped(self.crop(img, this_shape))
+#             results.append(result)
+            
+#         return torch.cat(results)
+            
+#     def crop(self, x, shape):
+#         return x[:shape[0], :shape[1]]
+        
+#     def forward_cropped(self, x):
+#         x = x.unsqueeze(0)
+#         for conv, bn in zip(self.convs, self.bns):
+#             x = self.pooling(self.activation(bn(conv(x))))
+            
+#         x = torch.mean(x, [2, 3])
+#         output = self.final(x).squeeze(0)
+#         return output
