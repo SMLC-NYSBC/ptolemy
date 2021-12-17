@@ -6,7 +6,7 @@ import numpy as np
 
 class LowMag_64x5_2ep(nn.Module):
     def __init__(self):
-        super(Model_64_64_64_64_64, self).__init__()
+        super(LowMag_64x5_2ep, self).__init__()
 
         self.pooling = nn.MaxPool2d(3, 2, padding=1)
         self.activation = nn.ReLU()
@@ -39,7 +39,7 @@ class LowMag_64x5_2ep(nn.Module):
         x = self.linear(x)
         # x = self.pooling(self.bn6(self.activation(self.layer6(x))))
         # x = self.output(x.reshape(-1, 128))
-        return x
+        return torch.sigmoid(x)
     
 class Wrapper:
     def __init__(self, model):
@@ -61,7 +61,7 @@ class Wrapper:
         for crop in cropset.crops:
             sizes.add(crop.shape)
         if len(sizes) == 1:
-            batch = torch.tensor(cropset.crops).unsqueeze(0).unsqueeze(0).float()
+            batch = torch.tensor(cropset.crops).unsqueeze(1).float()
             return self.forward_batch(batch)
         else:
             results = []

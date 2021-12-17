@@ -159,10 +159,10 @@ class LowMag_Process_Crops:
         # return self.exposure_mean_intens, self.exposure_std_intens
     
     def forward(self, exposure, crops):
-        crops.reshape(width=self.width)
+        crops.pad(width=self.width)
         if self.normalize:
             if not hasattr(self, 'exposure_mean_intens'):
-                self.intensity_mean_std(self, exposure)
+                self.intensity_mean_std(exposure)
         crops.normalize_constant(self.exposure_mean_intens, self.exposure_std_intens)
         return crops
 
