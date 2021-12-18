@@ -2,12 +2,13 @@
 A Python machine learning and computer vision library for automating cryo-EM data collection. The accompanying paper is available on [arxiv](https://arxiv.org/abs/2112.01534). 
 
 ## Details
-Ptolemy is designed to handle localization and scoring of squares in low-mag images (left) (TODO: resolution) and holes in medium-mag images (right) (TODO: resolution). It works on both gold and carbon holey, untilted grids. 
+Ptolemy is designed to handle localization and scoring of squares in low-mag images (TODO: resolution) and holes in medium-mag images (TODO: resolution). It works on both gold and carbon holey, untilted grids. 
 
-<p float="left">
-  <img src="example_images/for_readme/lowmag.png" width="200" />
-  <img src="example_images/for_readme/medmag.png" width="200" /> 
-</p>
+#### Example low mag image
+<img src="example_images/for_readme/lowmag.png" width="500" />
+
+#### Example med mag image
+<img src="example_images/for_readme/medmag.png" width="800" /> 
 
 ## Functionality
 Images and visualization are handled by the `Exposure` class in `ptolemy/images.py`, with algorithms for processing low and medium mag images in `ptolemy/algorithms.py`. The workflow is outlined in the tutorial notebooks. 
