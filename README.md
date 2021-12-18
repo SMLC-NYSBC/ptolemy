@@ -18,9 +18,6 @@ Ptolemy is designed to handle localization and scoring of squares in low-mag ima
   
 </p></details>
 
-#### Example med mag image
-<img src="example_images/for_readme/medmag.png" width="800" /> 
-
 ## Functionality
 Images and visualization are handled by the `Exposure` class in `ptolemy/images.py`, with algorithms for processing low and medium mag images in `ptolemy/algorithms.py`. The workflow is outlined in the tutorial notebooks. 
 
