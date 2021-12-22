@@ -73,18 +73,18 @@ class PointSet2D():
     def as_matrix_x(self):
         return np.stack((self.x, self.y), axis=0)
 
-    def bound_pts(self, ymin, xmin, ymax, xmax):
+    def bound_pts(self, ymin, xmin, ymax, xmax, tolerance=100):
         return_y = []
         return_x = []
         for y, x in zip(self.y, self.x):
-            if x < xmax + 100 and y < ymax + 100 and x > xmin - 100 and y > ymin - 100:
+            if x < xmax + tolerance and y < ymax + tolerance and x > xmin - tolerance and y > ymin - tolerance:
                 return_y.append(y)
                 return_x.append(x)
             
         return PointSet2D(return_y, return_x)
 
-    def bound_pts_imshape(self, shape):
-        return self.bound_pts(0, 0, shape[1], shape[0])
+    def bound_pts_imshape(self, shape, tolerance=100):
+        return self.bound_pts(0, 0, shape[1], shape[0], tolerance)
 
     @staticmethod
     def concatenate(list_of_pointsets):

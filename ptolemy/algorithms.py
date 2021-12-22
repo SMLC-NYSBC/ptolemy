@@ -140,10 +140,20 @@ class LowMag_Process_Mask:
     def forward(self, mask, image):
         segments, _ = flood_segments(mask, self.search_size)
         polygons = geom.segments_to_polygons(segments)
-        polygons = [poly for poly in polygons if poly.area() > self.remove_area_lt]
+        mean_intensities = []
+        polygons_ = []
+        
+        for i, poly in enumerate(polygons, 1):
+            if poly.area() > self.remove_area_lt:
+                polygons_.append(poly)
+                where = (segments == i)
+                pixels = image[where]
+                mean_intensities.append(np.mean(pixels))
+        
+        polygons = polygons_
         opt_rot_degrees = best_rot_angle(polygons, image.shape)
         boxes, rotated_boxes, rotated_image = geom.get_boxes_from_angle(image, polygons, opt_rot_degrees)
-        return boxes, rotated_boxes, rotated_image, opt_rot_degrees
+        return boxes, rotated_boxes, rotated_image, opt_rot_degrees, mean_intensities
 
 
 class LowMag_Process_Crops:
@@ -185,18 +195,24 @@ class UNet_Segmenter:
         return results
 
 class MedMag_Process_Mask:
-    def __init__(self, seg_search_size=6, gp_padding=15, fn_weight=10, crop_sides=10): #todo):
+    def __init__(self, seg_search_size=6, gp_padding=15, fn_weight=10, crop_sides=10, edge_tolerance=-10): #todo):
         self.seg_search_size = seg_search_size
         self.gp_padding = gp_padding
         self.fn_weight = fn_weight
         self.crop_sides = crop_sides
+        self.edge_tolerance = edge_tolerance
         # TODO: Rationalize how large to make each crop
 
     def forward(self, mask, image):
+        mean_intensities = None # we don't care about pixel intensities here
+        
         segments, _ = flood_segments(mask, self.seg_search_size)
         polygons = geom.segments_to_polygons(segments)
         centroids = geom.get_centroids_for_polygons(polygons)
         best_gps, angle, distance = grid_from_centroids(centroids, mask, self.gp_padding, self.fn_weight)
+        
+        best_gps = best_gps.bound_pts_imshape(image.shape, tolerance=self.edge_tolerance)
+        
         rotated_image = rotate(image, -angle)
 
         init_origin = [image.shape[0] // 2, image.shape[1] // 2]
@@ -212,7 +228,7 @@ class MedMag_Process_Mask:
             rotated_boxes.append(rotated_box)
             boxes.append(rotated_box.rotate_around_point(-math.radians(angle), rotated_origin, init_origin))
 
-        return boxes, rotated_boxes, rotated_image, angle
+        return boxes, rotated_boxes, rotated_image, angle, mean_intensities
 
 class MedMag_Process_Crops:
     def __init__(self, normalize=True):

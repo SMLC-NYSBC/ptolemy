@@ -48,7 +48,7 @@ class Exposure:
         # return copy.deepcopy(self.boxes), copy.deepcopy(self.rotated_boxes), copy.deepcopy(self.rotated_image), copy.deepcopy(self.rot_ang_deg)
 
     def process_mask(self, process_alg):
-        self.boxes, self.rotated_boxes, self.rotated_image, self.rot_ang_deg = process_alg.forward(self.mask, self.image)
+        self.boxes, self.rotated_boxes, self.rotated_image, self.rot_ang_deg, self.mean_intensities = process_alg.forward(self.mask, self.image)
 
     def get_crops(self, crop_alg=None):
         if not hasattr(self, 'rotated_boxes'):
@@ -57,8 +57,8 @@ class Exposure:
         for box in self.rotated_boxes:
             segmented_box = self.rotated_image[int(max(box.xmin(), 0)): int(min(box.xmax(), self.rotated_image.shape[0])) ,
                                                int(max(box.ymin(), 0)): int(min(box.ymax(), self.rotated_image.shape[1])) ]
-            if segmented_box.size < 100 or segmented_box.max() == segmented_box.min():
-                continue
+#             if segmented_box.size < 100 or segmented_box.max() == segmented_box.min():
+#                 continue
             crops.append(segmented_box)
 
         crops = CropSet(crops, self.boxes, self.rotated_boxes)

@@ -10,7 +10,7 @@ class CropSet:
         self.boxes = boxes
         self.rotated_boxes = rotated_boxes
         # self.crop_ind = np.array(range(len(crops)))
-        self.center_coords = PointSet2D.concatenate([PointSet2D([int(np.mean(y)) for y in box.y], [int(np.mean(x)) for x in box.x]) for box in boxes])
+        self.center_coords = PointSet2D.concatenate([PointSet2D([int(np.mean(box.y))], [int(np.mean(box.x))]) for box in boxes])
         self.df = pd.DataFrame({'boxes': self.boxes, 'centers': self.center_coords})
 
     def pad(self, width):
@@ -54,6 +54,7 @@ class CropSet:
     
     def update_scores(self, scores):
         self.df['scores'] = scores
+        self.scores = scores
         
     def viz_crops(self):
         for crop in self.crops:
