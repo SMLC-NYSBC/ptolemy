@@ -2,7 +2,7 @@ import os
 import sys
 import json
 
-path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+path = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, path)
 
 import numpy as np
@@ -11,7 +11,7 @@ import torch
 from ptolemy.images import load_mrc, Exposure
 import ptolemy.algorithms as algorithms
 import ptolemy.models as models
-modelpath = path + 'weights/211215_lowmag_64x5_defaultadam_tightw_e2.torchmodel'
+modelpath = path + '/weights/211215_lowmag_64x5_defaultadam_tightw_e2.torchmodel'
 
 def main():
 
