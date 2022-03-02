@@ -49,7 +49,7 @@ def main():
     model = models.AveragePoolModel(4, 128)
     model.load_state_dict(torch.load(modelpath_cls))
     wrapper = models.Wrapper(model)
-    ex.score_crops(wrapper)
+    ex.score_crops(wrapper, final=False)
     
     vertices = [box.as_matrix_y().tolist() for box in ex.crops.boxes]
     areas = [box.area() for box in ex.crops.boxes]

@@ -47,7 +47,7 @@ def main():
     model = models.LowMag_64x5_2ep()
     model.load_state_dict(torch.load(modelpath))
     wrapper = models.Wrapper(model)
-    ex.score_crops(wrapper)
+    ex.score_crops(wrapper, final=False)
     
     vertices = [box.as_matrix_y().tolist() for box in ex.crops.boxes]
     areas = [box.area() for box in ex.crops.boxes]
