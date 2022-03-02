@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import math
+from matplotlib import path
 
 class PointSet2D():
     def __init__(self, y, x):
@@ -10,6 +11,7 @@ class PointSet2D():
             y = np.array(y)
         self.x = x            
         self.y = y
+        self.path = path.Path(self.as_matrix_y())
 
     def area(self):
         # compute area treating pointset as polygon
@@ -71,7 +73,7 @@ class PointSet2D():
         return np.stack((self.y, self.x), axis=1)
     
     def as_matrix_x(self):
-        return np.stack((self.x, self.y), axis=0)
+        return np.stack((self.x, self.y), axis=1)
 
     def bound_pts(self, ymin, xmin, ymax, xmax, tolerance=100):
         return_y = []
@@ -90,4 +92,9 @@ class PointSet2D():
     def concatenate(list_of_pointsets):
         new = np.concatenate([ps.as_matrix_y() for ps in list_of_pointsets], axis=0)
         return PointSet2D(new[:, 0], new[:, 1])
-        
+    
+    def point_in_polygon(self, point_y, point_x):
+        if self.path.contains_points([[point_y, point_x]])[0]:
+            return True
+        else:
+            return False

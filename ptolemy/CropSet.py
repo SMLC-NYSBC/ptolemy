@@ -11,7 +11,8 @@ class CropSet:
         self.rotated_boxes = rotated_boxes
         # self.crop_ind = np.array(range(len(crops)))
         self.center_coords = PointSet2D.concatenate([PointSet2D([int(np.mean(box.y))], [int(np.mean(box.x))]) for box in boxes])
-        self.df = pd.DataFrame({'boxes': self.boxes, 'centers': self.center_coords})
+        center_coords_df = [PointSet2D([int(np.mean(box.y))], [int(np.mean(box.x))]) for box in boxes]
+        self.df = pd.DataFrame({'boxes': self.boxes, 'centers': center_coords_df, 'visited': 0})
 
     def pad(self, width):
         new_crops = []
@@ -53,8 +54,13 @@ class CropSet:
         self.crops = normalized_crops
     
     def update_scores(self, scores):
-        self.df['scores'] = scores
+        self.df['prior_scores'] = scores
         self.scores = scores
+
+    def update_finals(self, finals):
+        if type(finals) is np.ndarray:
+            finals = [arr for arr in finals]
+        self.df['final_activations'] = finals
         
     def viz_crops(self):
         for crop in self.crops:

@@ -44,7 +44,7 @@ def grid_from_centroids(centroids, mask, gp_padding=15, fn_weight=10):
 
     for i in range(len(distmat)):
         row = distmat[i]
-        topk = np.argpartition(row, min(len(row), 6))[:6]
+        topk = np.argpartition(row, min(len(row)-1, 6))[:min(len(row) - 1, 6)]
         for j in topk:
             if i == j:
                 continue
@@ -59,7 +59,10 @@ def grid_from_centroids(centroids, mask, gp_padding=15, fn_weight=10):
                 best_error = err
                 best_distance = distmat[i, j]
     # compute error
-    return best_gps, best_angle, best_distance
+    try:
+        return best_gps, best_angle, best_distance
+    except:
+        raise BadMedMagError
 
 def generate_gp(centroids, i, j, shape):
     anchor_i = [centroids.y[i], centroids.x[i]]
@@ -122,12 +125,16 @@ def gp_mask_error(gen_gps, target_mask, gp_padding, fn_weight):
     
     return (fn_weight * np.sum(fn ** 2)) + np.sum(fp ** 2)
 
+class BadMedMagError(Exception):
+    pass
+
 
 class PMM_Segmenter:
-    def __init__(self):
-        self.model = PoissonMixture()
+#     def __init__(self):
+#         pass
     
     def forward(self, image):
+        self.model = PoissonMixture()
         self.model.fit(image.astype(int), verbose=False)
         mask = self.model.mask
         return mask
@@ -178,21 +185,48 @@ class LowMag_Process_Crops:
 
 
 class UNet_Segmenter:
-    def __init__(self, channels, layers, model_path, threshold=0.0001, normalize=True):
+    def __init__(self, channels, layers, model_path, threshold=0.0001, normalize=True, cuda=False, dim_mult_of=512):
         model = BasicUNet(channels, layers)
         model.load_state_dict(torch.load(model_path))
         self.model = Wrapper(model)
         self.threshold = threshold
         self.normalize = normalize
+        if cuda:
+            self.model.to_cuda()
+        self.dim_mult_of = dim_mult_of
+        self.allowed_dims = [dim_mult_of * x for x in range(1, 5)]
     
     def forward(self, image):
         if self.normalize:
             image = (image - image.mean()) / image.std()
+            
+        
+        original_dim = image.shape
+        mean = image.mean()
+        
+        if image.shape[0] not in self.allowed_dims:
+            if image.shape[0] > self.allowed_dims[-1]:
+                raise InputError
+            for min_, max_ in zip(self.allowed_dims[:-1], self.allowed_dims[1:]):
+                if image.shape[0] > min_ and image.shape[0] < max_:
+                    addon = np.zeros((max_ - image.shape[0], image.shape[1]))
+                    addon = addon + mean
+                    image = np.concatenate((image, addon), axis=0)
+        
+        if image.shape[1] not in self.allowed_dims:
+            if image.shape[1] > self.allowed_dims[-1]:
+                raise InputError
+            for min_, max_ in zip(self.allowed_dims[:-1], self.allowed_dims[1:]):
+                if image.shape[1] > min_ and image.shape[1] < max_:
+                    addon = np.zeros((image.shape[0], max_ - image.shape[1]))
+                    addon = addon + mean
+                    image = np.concatenate((image, addon), axis=1)
+                    
         results = self.model.forward_single(image)
         results = expit(results)
         results[results > self.threshold] = 1
         results[results <= self.threshold] = 0
-        return results
+        return results[:original_dim[0], :original_dim[1]]
 
 class MedMag_Process_Mask:
     def __init__(self, seg_search_size=6, gp_padding=15, fn_weight=10, crop_sides=10, edge_tolerance=-10): #todo):
@@ -208,6 +242,8 @@ class MedMag_Process_Mask:
         
         segments, _ = flood_segments(mask, self.seg_search_size)
         polygons = geom.segments_to_polygons(segments)
+        if len(polygons) < 2:
+            raise BadMedMagError
         centroids = geom.get_centroids_for_polygons(polygons)
         best_gps, angle, distance = grid_from_centroids(centroids, mask, self.gp_padding, self.fn_weight)
         

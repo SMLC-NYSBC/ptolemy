@@ -30,16 +30,18 @@ class LowMag_64x5_2ep(nn.Module):
         # self.bn6 = nn.BatchNorm2d(32)
         # self.output = nn.Linear(128, 1, bias=True)
     
-    def forward(self, x):
+    def forward(self, x, finallayer=False):
         x = self.pooling(self.bn1(self.activation(self.layer1(x))))
         x = self.pooling(self.bn2(self.activation(self.layer2(x))))
         x = self.pooling(self.bn3(self.activation(self.layer3(x))))
         x = self.pooling(self.bn4(self.activation(self.layer4(x))))
         x = self.pooling(self.bn5(self.activation(self.layer5(x))))
-        x = self.linear(x)
+        final = self.linear(x)
+        if finallayer:
+            return torch.sigmoid(final), torch.squeeze(torch.mean(x, [2, 3]))
         # x = self.pooling(self.bn6(self.activation(self.layer6(x))))
         # x = self.output(x.reshape(-1, 128))
-        return torch.sigmoid(x)
+        return torch.sigmoid(final)
     
 class Wrapper:
     def __init__(self, model):
@@ -61,7 +63,7 @@ class Wrapper:
         for crop in cropset.crops:
             sizes.add(crop.shape)
         if len(sizes) == 1:
-            batch = torch.tensor(cropset.crops).unsqueeze(1).float()
+            batch = torch.tensor(np.array(cropset.crops)).unsqueeze(1).float()
             return self.forward_batch(batch)
         else:
             results = []
@@ -77,10 +79,13 @@ class Wrapper:
         return output
     
     def forward_single_scalarout(self, image):
-        image = torch.tensor(image).unsqueeze(0).unsqueeze(0).float()
-        if self.cuda:
-            image = image.cuda()
-        output = self.model.forward(image).item()
+        try:
+            image = torch.tensor(image).unsqueeze(0).unsqueeze(0).float()
+            if self.cuda:
+                image = image.cuda()
+            output = self.model.forward(image).item()
+        except:
+            return -100
         return output
         
     def forward_batch(self, batch):
@@ -88,6 +93,63 @@ class Wrapper:
             batch = batch.cuda()
         
         output = self.model.forward(batch).detach().cpu().numpy().flatten()
+        return output
+
+class Wrapper_Finallayer:
+    def __init__(self, model):
+        self.model = model
+        self.cuda = False
+    
+    # Might need to fix this later
+    def to_cuda(self):
+        self.model.cuda()
+        self.cuda = True
+
+    def to_cpu(self):
+        self.model.cpu()
+        self.cuda = False
+    
+    def forward_cropset(self, cropset):
+        # Check cropset sizes
+        sizes = set()
+        for crop in cropset.crops:
+            sizes.add(crop.shape)
+        if len(sizes) == 1:
+            batch = torch.tensor(np.array(cropset.crops)).unsqueeze(1).float()
+            return self.forward_batch(batch)
+        else:
+            results = []
+            finals = []
+            for crop in cropset.crops:
+                result, final = self.forward_single_scalarout(crop)
+                results.append(result)
+                finals.append(final)
+            return np.array(results), np.array(finals)
+
+    def forward_single(self, image):
+        image = torch.tensor(image).unsqueeze(0).unsqueeze(0).float()
+        if self.cuda:
+            image = image.cuda()
+        output = self.model.forward(image).detach().cpu().numpy()[0, 0]
+        return output
+    
+    def forward_single_scalarout(self, image):
+        # try:
+        image = torch.tensor(image).unsqueeze(0).unsqueeze(0).float()
+        if self.cuda:
+            image = image.cuda()
+        output = self.model.forward(image, finallayer=True)
+        output = (output[0].item(), output[1].detach().cpu().numpy())
+        # except:
+            # return -100
+        return output
+        
+    def forward_batch(self, batch):
+        if self.cuda:
+            batch = batch.cuda()
+        
+        output = self.model.forward(batch, finallayer=True)
+        output = (output[0].detach().cpu().numpy().flatten(), output[1].detach().cpu().numpy())
         return output
 
 
@@ -109,7 +171,7 @@ class BasicUNet(nn.Module):
             self.up_path.append(UpBlock(n_channels*2, n_channels))
         self.last = nn.Conv2d(n_channels, 1, 3, padding=1)
 
-    def forward(self, x):
+    def forward(self, x, final=False):
         blocks = [x]
         for i, down in enumerate(self.down_path):
             x = down(x)
@@ -168,12 +230,16 @@ class AveragePoolModel(nn.Module):
         
         self.final = nn.Linear(n_filters, 1)
         
-    def forward(self, x):
+    def forward(self, x, finallayer=False):
         for conv, bn in zip(self.convs, self.bns):
             x = self.pooling(self.activation(bn(conv(x))))
         x = torch.mean(x, [2, 3])
         output = self.final(x).squeeze(0)
-        return output
+
+        if finallayer:
+            return torch.sigmoid(output), torch.squeeze(x)
+        
+        return torch.sigmoid(output)
         
 #         results = []
         

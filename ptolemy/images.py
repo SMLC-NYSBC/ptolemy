@@ -36,8 +36,8 @@ class Exposure:
         #     m = int(np.round(image.shape[1]/scale))
         #     self.size = (n,m)
         #     self.image_scaled = downsample(image, self.size)
-        
-        self.operator_selections = operator_selections
+        if operator_selections:
+            self.operator_selections = operator_selections
 
     def make_mask(self, mask_alg):
         self.mask = mask_alg.forward(self.image)
@@ -50,16 +50,24 @@ class Exposure:
     def process_mask(self, process_alg):
         self.boxes, self.rotated_boxes, self.rotated_image, self.rot_ang_deg, self.mean_intensities = process_alg.forward(self.mask, self.image)
 
-    def get_crops(self, crop_alg=None):
+    def get_crops(self, crop_alg=None, min_width=None):
         if not hasattr(self, 'rotated_boxes'):
             raise ValueError
+            
         crops = []
-        for box in self.rotated_boxes:
-            segmented_box = self.rotated_image[int(max(box.xmin(), 0)): int(min(box.xmax(), self.rotated_image.shape[0])) ,
-                                               int(max(box.ymin(), 0)): int(min(box.ymax(), self.rotated_image.shape[1])) ]
-#             if segmented_box.size < 100 or segmented_box.max() == segmented_box.min():
-#                 continue
+        boxes = []
+        rotated_boxes = []
+        for box, rotated_box in zip(self.boxes, self.rotated_boxes):
+            segmented_box = self.rotated_image[int(max(rotated_box.xmin(), 0)): int(min(rotated_box.xmax(), self.rotated_image.shape[0])) ,
+                                               int(max(rotated_box.ymin(), 0)): int(min(rotated_box.ymax(), self.rotated_image.shape[1])) ]
+            if min_width and (segmented_box.shape[0] < min_width or segmented_box.shape[1] < min_width):
+                continue
             crops.append(segmented_box)
+            boxes.append(box)
+            rotated_boxes.append(rotated_box)
+            
+        self.boxes = boxes
+        self.rotated_boxes = rotated_boxes
 
         crops = CropSet(crops, self.boxes, self.rotated_boxes)
 
@@ -69,9 +77,9 @@ class Exposure:
         self.crops = crops
         return crops
 
-    def viz_boxes(self, rotated=False, selections=False):
-        if selections:
-            raise NotImplementedError
+    def viz_boxes(self, rotated=False, selections=False, given=False):
+        if selections and not hasattr(self, 'operator_selections'):
+            raise ValueError
         
         if rotated:
             image_to_show = self.rotated_image
@@ -83,6 +91,9 @@ class Exposure:
         _, ax = plt.subplots(figsize=(12, 12))
         ax.imshow(image_to_show, cmap='Greys_r')
         patches = []
+        
+        if given:
+            boxes_to_show = given
         for box in boxes_to_show:
             patches.append(matplotlib.patches.Polygon(box.as_matrix_y(), facecolor='None'))
         collection = matplotlib.collections.PatchCollection(patches)
@@ -91,17 +102,22 @@ class Exposure:
         collection.set_facecolor('none')
         collection.set_linewidth(2)
         plt.axis('off')
-        plt.show()
+        
+        if selections:
+            plt.scatter(self.operator_selections.x, self.operator_selections.y)
+        
+        # plt.show()
         # plt.plot image and boxes 
+        
 
-    def viz_boxes_and_scores(self, rotated=False, selections=False):
+    def viz_boxes_and_scores(self, rotated=False, selections=False, numeric_scores=False):
         # plt.plot image and boxes with nice viz
         if not hasattr(self, 'boxes'):
             raise ValueError # say you haven't gotten the boxes yet
-        if 'scores' not in self.crops.df.columns:
+        if 'prior_scores' not in self.crops.df.columns:
             raise ValueError # say you haven't scored the crops yet
-        if selections:
-            raise NotImplementedError
+        if selections and not hasattr(self, 'operator_selections'):
+            raise ValueError
         
         if rotated:
             image_to_show = self.rotated_image
@@ -117,7 +133,7 @@ class Exposure:
         patches = []
         colors = []
         
-        for box, score in zip(boxes_to_show, self.crops.df.scores):
+        for box, score in zip(boxes_to_show, self.crops.df.prior_scores):
             patches.append(matplotlib.patches.Polygon(box.as_matrix_y(), facecolor='none'))
             colors.append(score)
             
@@ -128,24 +144,48 @@ class Exposure:
         collection.set_facecolor('none')
         collection.set_linewidth(2)
         plt.axis('off')
-        plt.show()
+        if selections:
+            plt.scatter(self.operator_selections.x, self.operator_selections.y)
+            
+        if numeric_scores:
+            for center, text in zip(self.crops.df.centers, self.crops.df.prior_scores):
+                plt.text(center.y[0]+25, center.x[0]-25, str(round(text, 2)), color='red', bbox=dict(facecolor='white'))
+        
+        # plt.show()
 
         
-    def viz_mask(self, imsize=(8, 8)):
+    def viz_mask(self, selections=False, imsize=(8, 8)):
         plt.figure(figsize=imsize)
         plt.imshow(self.mask, cmap='Greys_r')
         plt.axis('off')
-        plt.show()
+        if selections:
+            plt.scatter(self.operator_selections.x, self.operator_selections.y)
+        # plt.show()
         
-    def viz_image(self, imsize=(8, 8)):
+    def viz_image(self, selections=False, imsize=(8, 8)):
         plt.figure(figsize=imsize)
         plt.imshow(self.image, cmap='Greys_r')
         plt.axis('off')
-        plt.show()
+        if selections:
+            plt.scatter(self.operator_selections.x, self.operator_selections.y)
+        # plt.show()
+        
+        
+    def viz_image_centers(self, imsize=(8, 8)):
+        plt.figure(figsize=imsize)
+        plt.imshow(self.image, cmap='Greys_r')
+        plt.scatter(self.crops.center_coords.y, self.crops.center_coords.x)
+        plt.axis('off')
 
-    def score_crops(self, classifier):
-        scores = classifier.forward_cropset(self.crops)
-        self.crops.update_scores(scores)
+    def score_crops(self, classifier, final):
+        if not final:
+            scores = classifier.forward_cropset(self.crops)
+            self.crops.update_scores(scores)
+        else:
+            scores, finals = classifier.forward_cropset(self.crops)
+            self.crops.update_scores(scores)
+            self.crops.update_finals(finals)
+
 
     # def get_crops(self, postprocess_alg=None):
     #     if not hasattr(self, 'rotated_boxes'):
