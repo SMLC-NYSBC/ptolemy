@@ -54,7 +54,7 @@ def main():
     vertices = [box.as_matrix_y().tolist() for box in ex.crops.boxes]
     areas = [box.area() for box in ex.crops.boxes]
     centers = np.round(ex.crops.center_coords.as_matrix_y()).astype(int).tolist()
-    intensities = ex.mean_intensities
+    # intensities = ex.mean_intensities
     scores = ex.crops.scores
     
     if format_ == 'json':
@@ -65,7 +65,7 @@ def main():
             d['vertices'] = vertices[i]
             d['center'] = centers[i]
             d['area'] = float(areas[i])
-            d['brightness'] = float(intensities[i])
+            # d['brightness'] = float(intensities[i])
             d['score'] = float(scores[i])
             
             js.append(d)
