@@ -41,9 +41,15 @@ def segments_to_polygons(segments):
 
 
 def get_boxes_from_angle(image, polygons, degrees):
-    original_origin = [image.shape[0] // 2, image.shape[1] // 2]
+    min_img = min(image.shape[0], image.shape[1])
     rotated_image = rotate(image, degrees)
-    rotated_origin = [rotated_image.shape[0] // 2, rotated_image.shape[1] // 2]
+    min_rotated= min(rotated_image.shape[0], rotated_image.shape[1])
+    
+    # original_origin = [image.shape[0] // 2, image.shape[1] // 2]
+    # rotated_origin = [rotated_image.shape[0] // 2, rotated_image.shape[1] // 2] 
+    
+    original_origin = [min_img // 2, min_img // 2] 
+    rotated_origin = [min_rotated // 2, min_rotated // 2]
     
     rotated_boxes = []
     boxes = []

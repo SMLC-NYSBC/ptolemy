@@ -204,7 +204,12 @@ class UNet_Segmenter:
         original_dim = image.shape
         mean = image.mean()
         
-        if image.shape[0] not in self.allowed_dims:
+        if image.shape[0] < 1024:
+            addon = np.zeros((1024 - image.shape[0], image.shape[1]))
+            addon = addon + mean
+            image = np.concatenate((image, addon), axis=0)
+            
+        elif image.shape[0] not in self.allowed_dims:
             if image.shape[0] > self.allowed_dims[-1]:
                 raise InputError
             for min_, max_ in zip(self.allowed_dims[:-1], self.allowed_dims[1:]):
@@ -212,8 +217,14 @@ class UNet_Segmenter:
                     addon = np.zeros((max_ - image.shape[0], image.shape[1]))
                     addon = addon + mean
                     image = np.concatenate((image, addon), axis=0)
-        
-        if image.shape[1] not in self.allowed_dims:
+            
+            
+        if image.shape[1] < 1440:
+            addon = np.zeros((image.shape[0], 1440 - image.shape[1]))
+            addon = addon + mean
+            image = np.concatenate((image, addon), axis=1)
+            
+        elif image.shape[1] not in self.allowed_dims:
             if image.shape[1] > self.allowed_dims[-1]:
                 raise InputError
             for min_, max_ in zip(self.allowed_dims[:-1], self.allowed_dims[1:]):
@@ -221,6 +232,26 @@ class UNet_Segmenter:
                     addon = np.zeros((image.shape[0], max_ - image.shape[1]))
                     addon = addon + mean
                     image = np.concatenate((image, addon), axis=1)
+                    
+#         mean = image.mean()
+        
+#         if image.shape[0] not in self.allowed_dims:
+#             if image.shape[0] > self.allowed_dims[-1]:
+#                 raise InputError
+#             for min_, max_ in zip(self.allowed_dims[:-1], self.allowed_dims[1:]):
+#                 if image.shape[0] > min_ and image.shape[0] < max_:
+#                     addon = np.zeros((max_ - image.shape[0], image.shape[1]))
+#                     addon = addon + mean
+#                     image = np.concatenate((image, addon), axis=0)
+        
+#         if image.shape[1] not in self.allowed_dims:
+#             if image.shape[1] > self.allowed_dims[-1]:
+#                 raise InputError
+#             for min_, max_ in zip(self.allowed_dims[:-1], self.allowed_dims[1:]):
+#                 if image.shape[1] > min_ and image.shape[1] < max_:
+#                     addon = np.zeros((image.shape[0], max_ - image.shape[1]))
+#                     addon = addon + mean
+#                     image = np.concatenate((image, addon), axis=1)
                     
         results = self.model.forward_single(image)
         results = expit(results)
