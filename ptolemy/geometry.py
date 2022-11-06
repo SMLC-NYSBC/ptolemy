@@ -75,3 +75,41 @@ def get_centroids_for_polygons(polygons):
     centroids = np.stack([poly.center_of_mass() for poly in polygons], axis=0)
     centroids = PointSet2D(centroids[:, 0], centroids[:, 1])
     return centroids
+
+def pad_crops(crops, width):
+    new_crops = []
+    for box in crops:
+        if box.shape[0] > width:
+            xcenter = box.shape[0] // 2
+            xmin, xmax = xcenter - width//2, xcenter + width//2
+            box = box[xmin:xmax, :]
+        else:
+            left_right_concat = np.zeros(( (width-box.shape[0])//2, box.shape[1]))
+            box = np.concatenate((left_right_concat, box, left_right_concat), axis=0)
+
+        if box.shape[1] > width:
+            ycenter = box.shape[1] // 2
+            ymin, ymax = ycenter - width//2, ycenter + width//2
+            box = box[:, ymin:ymax]
+        else:
+            top_bottom_concat = np.zeros((box.shape[0], (width - box.shape[1])//2))
+            box = np.concatenate((top_bottom_concat, box, top_bottom_concat), axis=1)
+        
+        if box.shape[0] != width:
+            box = np.concatenate((np.zeros((1, box.shape[1])), box), axis=0)
+        if box.shape[1] != width:
+            box = np.concatenate((np.zeros((box.shape[0], 1)), box), axis=1)
+        new_crops.append(box)
+
+    return new_crops
+
+def normalize_crops_using_mask(crops, lm_image, mask):
+    intensities = (lm_image * mask).flatten()
+    intensities = intensities[intensities != 0]
+    mean, std = intensities.mean(), intensities.std()
+
+    normalized_crops = []
+    for crop in crops:
+        normalized_crops.append((crop - mean) / std)
+
+    return normalized_crops

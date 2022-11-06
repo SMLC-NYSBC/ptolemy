@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-
 class LowMag_64x5_2ep(nn.Module):
     def __init__(self):
         super(LowMag_64x5_2ep, self).__init__()
@@ -30,127 +29,25 @@ class LowMag_64x5_2ep(nn.Module):
         # self.bn6 = nn.BatchNorm2d(32)
         # self.output = nn.Linear(128, 1, bias=True)
     
-    def forward(self, x, finallayer=False):
+    def forward(self, x):
         x = self.pooling(self.bn1(self.activation(self.layer1(x))))
         x = self.pooling(self.bn2(self.activation(self.layer2(x))))
         x = self.pooling(self.bn3(self.activation(self.layer3(x))))
         x = self.pooling(self.bn4(self.activation(self.layer4(x))))
         x = self.pooling(self.bn5(self.activation(self.layer5(x))))
         final = self.linear(x)
-        if finallayer:
-            return torch.sigmoid(final), torch.squeeze(torch.mean(x, [2, 3]))
         # x = self.pooling(self.bn6(self.activation(self.layer6(x))))
         # x = self.output(x.reshape(-1, 128))
         return torch.sigmoid(final)
-    
-class Wrapper:
-    def __init__(self, model):
-        self.model = model
-        self.cuda = False
-    
-    # Might need to fix this later
-    def to_cuda(self):
-        self.model.cuda()
-        self.cuda = True
 
-    def to_cpu(self):
-        self.model.cpu()
-        self.cuda = False
-    
-    def forward_cropset(self, cropset):
-        # Check cropset sizes
-        sizes = set()
-        for crop in cropset.crops:
-            sizes.add(crop.shape)
-        if len(sizes) == 1:
-            batch = torch.tensor(np.array(cropset.crops)).unsqueeze(1).float()
-            return self.forward_batch(batch)
-        else:
-            results = []
-            for crop in cropset.crops:
-                results.append(self.forward_single_scalarout(crop))
-            return np.array(results)
-
-    def forward_single(self, image):
-        image = torch.tensor(image).unsqueeze(0).unsqueeze(0).float()
-        if self.cuda:
-            image = image.cuda()
-        output = self.model.forward(image).detach().cpu().numpy()[0, 0]
-        return output
-    
-    def forward_single_scalarout(self, image):
-        try:
-            image = torch.tensor(image).unsqueeze(0).unsqueeze(0).float()
-            if self.cuda:
-                image = image.cuda()
-            output = self.model.forward(image).item()
-        except:
-            return -100
-        return output
+    def score_crops(self, preprocessed_crops):
+        with torch.no_grad():
+            scores = []
+            for crop in preprocessed_crops:
+                crop = torch.tensor(crop).unsqueeze(0).unsqueeze(0).float()
+                scores.append(self.forward(crop).item())
         
-    def forward_batch(self, batch):
-        if self.cuda:
-            batch = batch.cuda()
-        
-        output = self.model.forward(batch).detach().cpu().numpy().flatten()
-        return output
-
-class Wrapper_Finallayer:
-    def __init__(self, model):
-        self.model = model
-        self.cuda = False
-    
-    # Might need to fix this later
-    def to_cuda(self):
-        self.model.cuda()
-        self.cuda = True
-
-    def to_cpu(self):
-        self.model.cpu()
-        self.cuda = False
-    
-    def forward_cropset(self, cropset):
-        # Check cropset sizes
-        sizes = set()
-        for crop in cropset.crops:
-            sizes.add(crop.shape)
-        if len(sizes) == 1:
-            batch = torch.tensor(np.array(cropset.crops)).unsqueeze(1).float()
-            return self.forward_batch(batch)
-        else:
-            results = []
-            finals = []
-            for crop in cropset.crops:
-                result, final = self.forward_single_scalarout(crop)
-                results.append(result)
-                finals.append(final)
-            return np.array(results), np.array(finals)
-
-    def forward_single(self, image):
-        image = torch.tensor(image).unsqueeze(0).unsqueeze(0).float()
-        if self.cuda:
-            image = image.cuda()
-        output = self.model.forward(image).detach().cpu().numpy()[0, 0]
-        return output
-    
-    def forward_single_scalarout(self, image):
-        # try:
-        image = torch.tensor(image).unsqueeze(0).unsqueeze(0).float()
-        if self.cuda:
-            image = image.cuda()
-        output = self.model.forward(image, finallayer=True)
-        output = (output[0].item(), output[1].detach().cpu().numpy())
-        # except:
-            # return -100
-        return output
-        
-    def forward_batch(self, batch):
-        if self.cuda:
-            batch = batch.cuda()
-        
-        output = self.model.forward(batch, finallayer=True)
-        output = (output[0].detach().cpu().numpy().flatten(), output[1].detach().cpu().numpy())
-        return output
+        return scores
 
 
 class BasicUNet(nn.Module):    
@@ -171,7 +68,7 @@ class BasicUNet(nn.Module):
             self.up_path.append(UpBlock(n_channels*2, n_channels))
         self.last = nn.Conv2d(n_channels, 1, 3, padding=1)
 
-    def forward(self, x, final=False):
+    def forward(self, x):
         blocks = [x]
         for i, down in enumerate(self.down_path):
             x = down(x)
@@ -184,6 +81,12 @@ class BasicUNet(nn.Module):
 
         x = self.last(x)
         return x
+
+    def get_mask(self, mm_image):
+        with torch.no_grad():
+            mm_image = torch.tensor(mm_image).unsqueeze(0).unsqueeze(0).float()
+            output = self.forward(mm_image).detach().cpu().numpy()[0, 0]
+        return output
 
 
 class DownBlock(nn.Module):
@@ -213,11 +116,15 @@ class UpBlock(nn.Module):
         x = torch.cat([x, skip], 1)
         return self.activ(self.conv(x))
 
-class AveragePoolModel(nn.Module):
-    def __init__(self, n_layers, n_filters):
-        super(AveragePoolModel, self).__init__()
+class Hole_Classifier_Multitask(nn.Module):
+    def __init__(self, n_layers, n_filters, inpsize=300):
+        super(Hole_Classifier_Multitask, self).__init__()
+        self.inpsize = inpsize
+        for i in range(n_layers):
+            inpsize = (inpsize - 1) // 2
+        
         self.convs = nn.ModuleList()
-        self.convs.append(nn.Conv2d(1, n_filters, 5, 1, bias=False))
+        self.convs.append(nn.Conv2d(1, n_filters, 3, 1, bias=False))
         self.bns = nn.ModuleList()
         self.bns.append(nn.BatchNorm2d(n_filters))
         
@@ -225,38 +132,67 @@ class AveragePoolModel(nn.Module):
             self.convs.append(nn.Conv2d(n_filters, n_filters, 3, 1, bias=False))
             self.bns.append(nn.BatchNorm2d(n_filters))
         
-        self.pooling = nn.MaxPool2d(3, 2, padding=0)
+        self.pooling = nn.MaxPool2d(3, 2, padding=1)
         self.activation = nn.ReLU()
         
-        self.final = nn.Linear(n_filters, 1)
-        
-    def forward(self, x, finallayer=False):
+        self.final1 = nn.Conv2d(n_filters, 1, inpsize, 1, padding=0)
+        self.final2 = nn.Conv2d(n_filters, 1, inpsize, 1, padding=0)
+        self.final3 = nn.Conv2d(n_filters, 1, inpsize, 1, padding=0)
+    
+    def forward(self, x):
+        # return self.forward_cropped(x)
         for conv, bn in zip(self.convs, self.bns):
             x = self.pooling(self.activation(bn(conv(x))))
-        x = torch.mean(x, [2, 3])
-        output = self.final(x).squeeze(0)
+            
+        return self.final1(x), self.final2(x), self.final3(x)
+    
+    def get_activations(self, x):
+        for conv, bn in zip(self.convs, self.bns):
+            x = self.pooling(self.activation(bn(conv(x))))
+            
+        return x
 
-        if finallayer:
-            return torch.sigmoid(output), torch.squeeze(x)
+    def extract_features(self, batch):
+        with torch.no_grad():
+            batch = torch.tensor(batch).float()
+            return self.get_activations(batch).squeeze().detach().cpu().numpy()
+
+class BasicFixedDimModel(nn.Module):
+    def __init__(self, n_layers, n_filters, inpsize=402):
+        super(BasicFixedDimModel, self).__init__()
+        for i in range(n_layers):
+            inpsize = (inpsize - 1) // 2
         
-        return torch.sigmoid(output)
         
-#         results = []
+        self.convs = nn.ModuleList()
+        self.convs.append(nn.Conv2d(1, n_filters, 3, 1, bias=False))
+        self.bns = nn.ModuleList()
+        self.bns.append(nn.BatchNorm2d(n_filters))
         
-#         for img, this_shape in zip(x, shape):
-#             result = self.forward_cropped(self.crop(img, this_shape))
-#             results.append(result)
+        for _ in range(1, n_layers):
+            self.convs.append(nn.Conv2d(n_filters, n_filters, 3, 1, bias=False))
+            self.bns.append(nn.BatchNorm2d(n_filters))
+        
+        self.pooling = nn.MaxPool2d(3, 2, padding=1)
+        self.activation = nn.ReLU()
+        
+        self.final = nn.Conv2d(n_filters, 1, inpsize, 1, padding=0)
+    
+    def forward(self, x):
+        # return self.forward_cropped(x)
+        for conv, bn in zip(self.convs, self.bns):
+            x = self.pooling(self.activation(bn(conv(x))))
             
-#         return torch.cat(results)
+        return self.final(x)
+    
+    def forward_final(self, x):
+        for conv, bn in zip(self.convs, self.bns):
+            x = self.pooling(self.activation(bn(conv(x))))
             
-#     def crop(self, x, shape):
-#         return x[:shape[0], :shape[1]]
-        
-#     def forward_cropped(self, x):
-#         x = x.unsqueeze(0)
-#         for conv, bn in zip(self.convs, self.bns):
-#             x = self.pooling(self.activation(bn(conv(x))))
-            
-#         x = torch.mean(x, [2, 3])
-#         output = self.final(x).squeeze(0)
-#         return output
+        return x, self.final(x)
+
+    def score_batch(self, batch):
+        with torch.no_grad():
+            batch = torch.tensor(batch).float()
+            return self.forward(batch).flatten().detach().cpu().numpy()
+

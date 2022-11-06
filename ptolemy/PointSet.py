@@ -13,6 +13,9 @@ class PointSet2D():
         self.y = y
         self.path = path.Path(self.as_matrix_y())
 
+    def __len__(self):
+        return len(self.x)
+
     def area(self):
         # compute area treating pointset as polygon
         area = 0.5*np.abs(np.dot(self.x, np.roll(self.y, 1)) - np.dot(self.y, np.roll(self.x, 1)))
