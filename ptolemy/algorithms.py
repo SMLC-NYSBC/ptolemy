@@ -1,21 +1,11 @@
 # Contain box angle finding, lattice fitting algos, maybe some others
 import numpy as np
 from scipy.signal import convolve2d
-from scipy.ndimage import label, rotate
+from scipy.ndimage import label
 from ptolemy.PointSet import PointSet2D
-from ptolemy.PoissonMixture import PoissonMixture
-import ptolemy.geometry as geom
 from scipy.optimize import minimize_scalar
 import math
-from ptolemy.models import BasicUNet, Wrapper
-import torch
-from scipy.spatial.distance import cdist, euclidean, pdist, squareform 
-from scipy.special import expit
-import matplotlib.pyplot as plt
-from skimage.transform import hough_circle, hough_circle_peaks
-from skimage.feature import canny
-import pandas as pd
-from scipy.ndimage import gaussian_filter
+from scipy.spatial.distance import pdist, squareform 
 
 def flood_segments(mask, search_size):
     """
@@ -63,10 +53,7 @@ def grid_from_centroids(centroids, mask, gp_padding=15, fn_weight=10):
                 best_error = err
                 best_distance = distmat[i, j]
     # compute error
-    try:
-        return best_gps, best_angle, best_distance
-    except:
-        raise BadMedMagError
+    return best_gps, best_angle, best_distance
 
 def generate_gp(centroids, i, j, shape):
     anchor_i = [centroids.y[i], centroids.x[i]]
@@ -130,12 +117,12 @@ def gp_mask_error(gen_gps, target_mask, gp_padding, fn_weight):
     return (fn_weight * np.sum(fn ** 2)) + np.sum(fp ** 2)
 
 
-class PMM_Segmenter:    
-    def forward(self, image):
-        self.model = PoissonMixture()
-        self.model.fit(image.astype(int), verbose=False)
-        mask = self.model.mask
-        return mask
+# class PMM_Segmenter:    
+#     def forward(self, image):
+#         self.model = PoissonMixture()
+#         self.model.fit(image.astype(int), verbose=False)
+#         mask = self.model.mask
+#         return mask
 
 # class LowMag_Process_Mask:
 #     def __init__(self, search_size=6, remove_area_lt=100):

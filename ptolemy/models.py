@@ -42,12 +42,14 @@ class LowMag_64x5_2ep(nn.Module):
 
     def score_crops(self, preprocessed_crops):
         with torch.no_grad():
-            scores = []
-            for crop in preprocessed_crops:
-                crop = torch.tensor(crop).unsqueeze(0).unsqueeze(0).float()
-                scores.append(self.forward(crop).item())
+            batch = torch.tensor(np.array(preprocessed_crops)).unsqueeze(1).float()
+            return self.forward(batch).detach().cpu().numpy().flatten()
+        #     scores = []
+        #     for crop in preprocessed_crops:
+        #         crop = torch.tensor(crop).unsqueeze(0).unsqueeze(0).float()
+        #         scores.append(self.forward(crop).item())
         
-        return scores
+        # return scores
 
 
 class BasicUNet(nn.Module):    

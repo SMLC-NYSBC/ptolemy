@@ -34,18 +34,22 @@ class Ptolemy:
     But you can also optionally only load/run parts of this class such as the constitutent functions in process_lm_image and process_mm_image
     """
 
-    def __init__(self, min_ctf_thresh=3, max_ctf_thresh=7, aggressive=False, config_path='default_config.json'):
+    def __init__(self, min_ctf_thresh=3, max_ctf_thresh=7, aggressive=False, config='default'):
         self.min_ctf_thresh = min_ctf_thresh
         self.max_ctf_thresh = max_ctf_thresh
         self.aggressive = aggressive
         self.init_grid_id = 0
+        if config == 'default':
+            config_path = os.path.dirname(os.path.realpath(__file__)) + '/default_config.json'
+        else:
+            config_path = config
         self.load_config(config_path)
         self.load_models()
 
 
     def load_models(self):
         self.lm_classification_model = models.LowMag_64x5_2ep()
-        self.lm_classification_model.load_state_dict(torch.load(self.settings['lm_classifation_model_path']))
+        self.lm_classification_model.load_state_dict(torch.load(self.settings['lm_prior_classication_model_path']))
 
         self.mm_segmenter = models.BasicUNet(64, 9)
         self.mm_segmenter.load_state_dict(torch.load(self.settings['mm_segmentation_model_path']))
@@ -66,18 +70,19 @@ class Ptolemy:
 
 
     def process_lm_image(self, lm_image):
-        raw_crops, preprocessed_crops, centers, vertices, areas, mean_intensities = self.get_lm_crops(lm_image)
+        raw_crops, preprocessed_crops, centers, vertices, areas, mean_intensities = self.get_lm_crops(lm_image) # TODO return boxes
+        raw_crops, preprocessed_crops, centers, vertices, areas, mean_intensities = raw_crops[1:], preprocessed_crops[1:], centers[1:], vertices[1:], areas[1:], mean_intensities[1:]
         features = self.get_lm_features(raw_crops)
         prior_scores = self.get_lm_prior_scores(preprocessed_crops, features)
         return raw_crops, centers, vertices, areas, mean_intensities, features, prior_scores
 
 
     def process_mm_image(self, mm_image):
-        crops, centers, radius = self.get_mm_crops(mm_image)
+        crops, centers, radius, boxes = self.get_mm_crops(mm_image)
         batch = self.mm_crops_to_preprocessed_batch(crops, radius)
         features = self.get_mm_features(batch)
         prior_scores = self.get_mm_prior_scores(batch, features)
-        return crops, centers, radius, features, prior_scores
+        return crops, centers, boxes, radius, features, prior_scores
 
 
     ############# Low Mag Processing Functions ############
@@ -86,16 +91,16 @@ class Ptolemy:
         mask, segments = self._segment_lm(lm_image)
         polygons = geom.segments_to_polygons(segments)
         
-        polygons, segment_indices = self._filter_polygon_areas(polygons, segments)
+        polygons, segment_indices = self._filter_polygon_areas(polygons)
 
         opt_rot_degrees = best_rot_angle(polygons, lm_image.shape)
         boxes, rotated_boxes, rotated_image = geom.get_boxes_from_angle(lm_image, polygons, opt_rot_degrees)
 
-        crops = self._crops_from_vertices(boxes, rotated_boxes, rotated_image) # could probably move to geom
+        crops = self._crops_from_vertices(rotated_boxes, rotated_image) # could probably move to geom
         crops, boxes, segment_indices = self._filter_crop_size(crops, boxes, segment_indices)
 
         preprocessed_crops = geom.pad_crops(crops, self.settings['lm_crop_width'])
-        preprocessed_crops = geom.normalize_crops_using_mask(crops, lm_image, mask)
+        preprocessed_crops = geom.normalize_crops_using_mask(preprocessed_crops, lm_image, mask)
 
         mean_intensities = [np.mean(lm_image[(segments == index)]) for index in segment_indices] # TODO eventually we might want to try collecting features from the segments not the crops
 
@@ -109,7 +114,7 @@ class Ptolemy:
 
     def _segment_lm(self, lm_image):
         pmm = PoissonMixture()
-        pmm.fit(lm_image, verbose=False)
+        pmm.fit(lm_image.astype(int), verbose=False)
         mask = pmm.mask
 
         segments, _ = flood_segments(mask, self.settings['lm_segment_search_size'])
@@ -131,6 +136,7 @@ class Ptolemy:
         for rotated_box in rotated_boxes:
             crop = rotated_image[int(max(rotated_box.xmin(), 0)): int(min(rotated_box.xmax(), rotated_image.shape[0])) ,
                                  int(max(rotated_box.ymin(), 0)): int(min(rotated_box.ymax(), rotated_image.shape[1])) ]
+            # TODO possibly consider minimum box size
             crops.append(crop)
         
         return crops
@@ -139,7 +145,7 @@ class Ptolemy:
     def _filter_crop_size(self, crops, boxes, segment_indices):
         ret_crops, ret_boxes, ret_segment_indices = [], [], []
         for crop, box, index in zip(crops, boxes, segment_indices):
-            if crop.shape[0] < self.lm_square_min_width or crop.shape[1] < self.lm_square_min_width:
+            if crop.shape[0] < self.settings['lm_square_min_width'] or crop.shape[1] < self.settings['lm_square_min_width']:
                 continue
             ret_crops.append(crop)
             ret_boxes.append(box)
@@ -161,9 +167,9 @@ class Ptolemy:
                 np.max(crop),
                 np.min(crop),
                 np.var(crop),
-                crop.shape[0] * crop.shape[1],
-                kurtosis(crop),
-                skew(crop)
+                np.float(crop.shape[0] * crop.shape[1]),
+                np.float(kurtosis(crop, axis=None)),
+                np.float(skew(crop, axis=None))
             ]))
         
         return feats
@@ -192,7 +198,9 @@ class Ptolemy:
 
         radius = self._mm_hole_radii(crops)
 
-        return crops, centers, radius
+        boxes = [box.as_matrix_y() for box in boxes]
+
+        return crops, centers, radius, boxes
 
 
     def _get_mm_mask(self, mm_image):
@@ -348,7 +356,7 @@ class Ptolemy:
         rescaled_crops = [self._mm_resize_to_radius(crop, radius, self.settings['target_hole_radius']) for crop in crops]
         if 'noice_hole_intensity' not in self.settings.keys():
             raise AttributeError('No-ice hole pixel intensity not set')
-        rescaled_crops = rescaled_crops / self.settings['noice_hole_intensity']
+        rescaled_crops = [crop / self.settings['noice_hole_intensity'] for crop in rescaled_crops]
 
         batch = self._crops_to_fixed_size_batch(rescaled_crops, self.settings['mm_input_crop_size'])
         return batch

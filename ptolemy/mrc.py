@@ -229,5 +229,12 @@ def load_mrc(path):
         content = f.read()
     im,_,_ = parse(content)
     im = np.copy(im)
+
+    im = clean_outliers(im)
     return im
 
+def clean_outliers(image):
+    if np.sum(image < 0) != 0:
+        image[image < 0] = 0
+
+    return image
