@@ -6,54 +6,36 @@ path = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, path)
 
 import numpy as np
-import torch
 
-from ptolemy.images import load_mrc, Exposure
-import ptolemy.algorithms as algorithms
-import ptolemy.models as models
-modelpath = path + '/weights/211215_lowmag_64x5_defaultadam_tightw_e2.torchmodel'
+from ptolemy.Ptolemy import Ptolemy
+from ptolemy.mrc import load_mrc
+
 
 def main():
-
     import argparse
     parser = argparse.ArgumentParser()
 
     parser.add_argument('path', help='path to montage image')
-    parser.add_argument('-v', action='store_true')
-    parser.add_argument('-f', '--format', dest='format_', default='txt', help='format to write region coordinates')
+    parser.add_argument('-v', action='store_true', help='verbose')
+    parser.add_argument('-f', '--format', dest='format_', default='json', help='format to write region coordinates')
     parser.add_argument('-o', '--output', help='output file path')
+    parser.add_argument('-c', '--config', default='default', help='path to config file')
 
     args = parser.parse_args()
     verbose = args.v
     path = args.path
     format_ = args.format_
     output_path = args.output
+    config = args.config
+
+    pipeline = Ptolemy(config)
 
     # open the montage
     image = load_mrc(path)
-#     if len(image.shape) > 2:
-#         print('WARNING: ' + path + ' is an image stack. Only processing the first image.', file=sys.stderr)
-#         image = image[0]
-    ex = Exposure(image)
     
-    segmenter = algorithms.PMM_Segmenter()
-    ex.make_mask(segmenter)
-    
-    processor = algorithms.LowMag_Process_Mask()
-    ex.process_mask(processor)
-    
-    cropper = algorithms.LowMag_Process_Crops()
-    ex.get_crops(cropper)
-    model = models.LowMag_64x5_2ep()
-    model.load_state_dict(torch.load(modelpath))
-    wrapper = models.Wrapper(model)
-    ex.score_crops(wrapper, final=False)
-    
-    vertices = [box.as_matrix_y().tolist() for box in ex.crops.boxes]
-    areas = [box.area() for box in ex.crops.boxes]
-    centers = np.round(ex.crops.center_coords.as_matrix_y()).astype(int).tolist()
-    intensities = ex.mean_intensities
-    scores = ex.crops.scores
+    outputs = pipeline.process_lm_image(image)
+
+    _, centers, vertices, areas, intensities, _, scores = outputs
     
     if format_ == 'json':
         order = np.argsort(scores)[::-1]
@@ -84,7 +66,7 @@ def main():
 
     f = sys.stdout
     if args.output is not None:
-        f = open(args.output, 'w')
+        f = open(output_path, 'w')
     print(content, file=f)
 
 

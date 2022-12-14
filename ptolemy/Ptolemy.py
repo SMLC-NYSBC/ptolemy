@@ -34,17 +34,12 @@ class Ptolemy:
     But you can also optionally only load/run parts of this class such as the constitutent functions in process_lm_image and process_mm_image
     """
 
-    def __init__(self, min_ctf_thresh=3, max_ctf_thresh=7, aggressive=False, config='default'):
-        self.min_ctf_thresh = min_ctf_thresh
-        self.max_ctf_thresh = max_ctf_thresh
-        self.aggressive = aggressive
-        self.init_grid_id = 0
+    def __init__(self, config='default'):
         if config == 'default':
             config_path = os.path.dirname(os.path.realpath(__file__)) + '/default_config.json'
         else:
             config_path = config
-        self.load_config(config_path)
-        self.load_models()
+        self.load_config_and_models(config_path)
 
 
     def load_models(self):
@@ -65,13 +60,13 @@ class Ptolemy:
         self.settings['noice_hole_intensity'] = intensity
         
 
-    def load_config(self, config_path):
+    def load_config_and_models(self, config_path):
         self.settings = json.load(open(config_path, 'r'))
+        self.load_models()
 
 
     def process_lm_image(self, lm_image):
         raw_crops, preprocessed_crops, centers, vertices, areas, mean_intensities = self.get_lm_crops(lm_image) # TODO return boxes
-        raw_crops, preprocessed_crops, centers, vertices, areas, mean_intensities = raw_crops[1:], preprocessed_crops[1:], centers[1:], vertices[1:], areas[1:], mean_intensities[1:]
         features = self.get_lm_features(raw_crops)
         prior_scores = self.get_lm_prior_scores(preprocessed_crops, features)
         return raw_crops, centers, vertices, areas, mean_intensities, features, prior_scores

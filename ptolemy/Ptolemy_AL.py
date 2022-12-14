@@ -1,6 +1,5 @@
-import os
-import sys
 import json
+import os
 
 import numpy as np
 import pandas as pd
@@ -62,7 +61,7 @@ class Ptolemy_AL:
     At some point should probably do some experiments that show this is better
     """
 
-    def __init__(self, config_path='default_config.json', lm_state=None, mm_state=None):
+    def __init__(self, config='default', lm_state=None, mm_state=None):
         # we enforce lm_state to have "square_id" be the index
         if not lm_state:
             self.lm_state = pd.DataFrame(columns= ['square_id', 'grid_id', 'center', 'features', 'prior_score', 'visited'])
@@ -80,7 +79,31 @@ class Ptolemy_AL:
         if self.mm_state.index.name != 'hole_id':
             self.mm_state = self.mm_state.set_index('hole_id')
 
+        if config == 'default':
+            config_path = os.path.dirname(os.path.realpath(__file__)) + '/default_config.json'
+        else:
+            config_path = config
+        
+        self.load_config(config_path)
+
+    def load_config(self, config_path):
         self.settings = json.load(open(config_path, 'r'))
+
+    def load_lm_state(self, lm_state_path):
+        """
+        Loads and overwrites existing lm_state from reading lm_state_path dataframe pickle
+        """
+        self.lm_state = pd.read_pickle(lm_state_path)
+        if self.lm_state.index.name != 'square_id':
+            self.lm_state = self.lm_state.set_index('square_id')
+
+    def load_mm_state(self, mm_state_path):
+        """
+        Loads and overwrites existing mm_state from reading mm_state_path dataframe pickle
+        """
+        self.mm_state = pd.read_pickle(mm_state_path)
+        if self.mm_state.index.name != 'hole_id':
+            self.mm_state = self.mm_state.set_index('hole_id')
 
     def compute_lengthscale(self):
         # Low mag lengthscale is computed just based on the square features alone. 
@@ -111,14 +134,13 @@ class Ptolemy_AL:
         
     #     return save_dict
 
-    def run_lm_gp(self):
+    def run_lm_gp(self, grid_id=-1):
         # Get visited squares
         # Create ctf-based training set
         # initially use ctf < 5 as cutoff - in the future, modify this to allow for multitask lm model
         # Fit GP with set hyperparameters
         # Predict unvisited squares, compute UCB probabilities
         # return dataframe of unvisited squares with gp probabilities
-        # TODO set grid ID to only use a certain grid
 
         train_x, train_y = [], []
 
@@ -151,10 +173,16 @@ class Ptolemy_AL:
             ucb_probs = upper_confidence_bound(sample)
             unvisited_squares['GP_probs'] = ucb_probs.numpy()
 
-        return unvisited_squares
+        if grid_id != -1:
+            return unvisited_squares[unvisited_squares['grid_id'] == grid_id]
+        else:
+            return unvisited_squares
 
     
-    def run_mm_gp(self, candidate_holes=None):
+    def run_mm_gp(self, candidate_holes=None, hole_ids=None, square_ids=None, save_candidate_holes=False):
+        # either run on all holes (all none) or candidate holes (you pass me the holes to run on)
+        # or hole_ids (run only on these hole ids) or square ids (run on all unvisited holes with these square ids) TODO implement this
+
         # do the same thing as run_lm but for mm
         visited_holes = self.mm_state[(self.mm_state['visited'])].dropna(subset=['features', 'ctf', 'ice_thickness'])
 
@@ -169,9 +197,15 @@ class Ptolemy_AL:
         # If candidate_holes is None, run the model on all unvisited holes
         # Else, add candidate holes to mm_state and only run model on candidate holes
         if candidate_holes:
-            self.mm_state = pd.concat((self.mm_state, candidate_holes))
             holes_to_run = candidate_holes
 
+            if save_candidate_holes:
+                self.mm_state = pd.concat((self.mm_state, candidate_holes))
+
+        elif hole_ids:
+            holes_to_run = self.mm_state.loc[holes_to_run]
+        elif square_ids:
+            holes_to_run = self.mm_state[self.mm_state['square_id'].isin(square_ids)]        
         else:
             holes_to_run = self.mm_state[~self.mm_state['visited']]
         
@@ -189,14 +223,17 @@ class Ptolemy_AL:
 
         return holes_to_run
 
-    def add_hole_to_state(self, square_id, grid_id, center, features, hole_id=None, prior_score=None, visited=False, ctf=None, ice_thickness=None):
+    def add_hole_to_state(self, square_id, grid_id, center, features, prior_score, hole_id=None, visited=False, ctf=None, ice_thickness=None):
         if not hole_id:
             hole_id = len(self.mm_state)
         self.mm_state.loc[hole_id] = {'square_id': square_id, 'grid_id': grid_id, 'center': center, 'features': features, 'prior_score': prior_score, 'visited': visited, 'ctf': ctf, 'ice_thickness': ice_thickness}
+        return hole_id
 
     def add_square_to_state(self, grid_id, center, features, prior_score, square_id=None, visited=False):
         if not square_id:
             square_id = len(self.lm_state)
+
+        # check uniqueness of square id here
 
         self.lm_state.loc[square_id] = {'grid_id': grid_id, 'center': center, 'features': features, 'prior_score': prior_score, 'visited': visited}
 
