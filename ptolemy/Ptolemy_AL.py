@@ -57,27 +57,45 @@ class Ptolemy_AL:
 
     Holds state for low-mag and medium-mag cases
 
+    There are two types of states to consider. "Historical" state and "Current" state. 
+    
+        - Historical states are from previous grids whose data is relevant for the current grid. Their grid_ids, hole_ids, and square_ids are meaningless, but the data is used in addition to the current state to fit the GPs.
+        - Current state is the current grid or cassette that is being operated on. These grid_ids, hole_ids, and square_ids are relevant and potentially accessible for collection. Current state is updated during collection, and can be saved to be used later as a historical state. You should load current state when, for example, you want to resume collection on a grid. 
+
+        Currently, there is no priority on the GPs to weight "current" state data higher than "historical" state data, so be careful about what data you put into "historical" state. 
+
+
     Initially we are going to use fixed GP hyperparameters.
     At some point should probably do some experiments that show this is better
     """
 
-    def __init__(self, config='default', lm_state=None, mm_state=None):
+    def __init__(self, config='default', historical_lm_state=None, historical_mm_state=None, current_lm_state=None, current_mm_state=None):
         # we enforce lm_state to have "square_id" be the index
-        if not lm_state:
-            self.lm_state = pd.DataFrame(columns= ['square_id', 'grid_id', 'center', 'features', 'prior_score', 'visited'])
+        if not historical_lm_state:
+            self.historical_lm_state = pd.DataFrame(columns= ['square_id', 'grid_id', 'center', 'features', 'prior_score', 'visited'])
         else:
-            self.lm_state = lm_state
+            self.historical_lm_state = historical_lm_state
 
-        if self.lm_state.index.name != 'square_id':
-            self.lm_state = self.lm_state.set_index('square_id')
-
-        if not mm_state:
-            self.mm_state = pd.DataFrame(columns= ['hole_id', 'square_id', 'grid_id', 'center', 'features', 'prior_score', 'visited', 'ctf', 'ice_thickness'])
+        if not current_lm_state:
+            self.current_lm_state = pd.DataFrame(columns= ['square_id', 'grid_id', 'center', 'features', 'prior_score', 'visited'])
         else:
-            self.mm_state = mm_state
+            self.current_lm_state = current_lm_state
 
-        if self.mm_state.index.name != 'hole_id':
-            self.mm_state = self.mm_state.set_index('hole_id')
+        # if self.lm_state.index.name != 'square_id':
+        #     self.lm_state = self.lm_state.set_index('square_id')
+
+        if not historical_mm_state:
+            self.historical_mm_state = pd.DataFrame(columns= ['hole_id', 'square_id', 'grid_id', 'center', 'features', 'prior_score', 'visited', 'ctf', 'ice_thickness'])
+        else:
+            self.historical_mm_state = historical_mm_state
+
+        if not historical_mm_state:
+            self.historical_mm_state = pd.DataFrame(columns= ['hole_id', 'square_id', 'grid_id', 'center', 'features', 'prior_score', 'visited', 'ctf', 'ice_thickness'])
+        else:
+            self.historical_mm_state = historical_mm_state
+
+        # if self.mm_state.index.name != 'hole_id':
+        #     self.mm_state = self.mm_state.set_index('hole_id')
 
         if config == 'default':
             config_path = os.path.dirname(os.path.realpath(__file__)) + '/default_config.json'
@@ -85,25 +103,57 @@ class Ptolemy_AL:
             config_path = config
         
         self.load_config(config_path)
+        self.current_active_holes = set()
 
+    
     def load_config(self, config_path):
         self.settings = json.load(open(config_path, 'r'))
 
-    def load_lm_state(self, lm_state_path):
-        """
-        Loads and overwrites existing lm_state from reading lm_state_path dataframe pickle
-        """
-        self.lm_state = pd.read_pickle(lm_state_path)
-        if self.lm_state.index.name != 'square_id':
-            self.lm_state = self.lm_state.set_index('square_id')
 
-    def load_mm_state(self, mm_state_path):
+    def _load_state(self, path):
+        # logic for loading states. Currently, assumes a pickle
+        return pd.read_pickle(path)
+
+    def _save_state(self, state, path):
+        # logic for saving states, currently assumes a pickle
+        state.to_pickle(path)
+
+
+    def load_historical_lm_state(self, lm_state_path):
         """
-        Loads and overwrites existing mm_state from reading mm_state_path dataframe pickle
+        Appends path in lm_state_path to the historical_lm_state
         """
-        self.mm_state = pd.read_pickle(mm_state_path)
-        if self.mm_state.index.name != 'hole_id':
-            self.mm_state = self.mm_state.set_index('hole_id')
+        self.historical_lm_state = pd.concat((self.historical_lm_state, self._load_state(lm_state_path)))
+
+    
+    def load_historical_mm_state(self, mm_state_path):
+        """
+        Appends path in mm_state_path to the historical_lm_state
+        """
+        self.historical_mm_state = pd.concat((self.historical_lm_state, self._load_state(mm_state_path)))
+
+    
+    def load_current_lm_state(self, lm_state_path):
+        """
+        Loads and overwrites existing current_lm_state from reading lm_state_path dataframe pickle
+        """
+        self.current_lm_state = self._load_state(lm_state_path)
+
+    
+    def load_current_mm_state(self, mm_state_path):
+        """
+        Loads and overwrites existing current_mm_state from reading mm_state_path dataframe pickle
+        """
+        self.current_mm_state = self._load_state(mm_state_path)
+
+
+    def save_lm_state(self, path):
+        self._save_state(self.current_lm_state, path)
+
+    
+    def save_mm_state(self, mm_state_path):
+        self._save_state(self.current_mm_state, path)
+
 
     def compute_lengthscale(self):
         # Low mag lengthscale is computed just based on the square features alone. 
@@ -162,6 +212,8 @@ class Ptolemy_AL:
         model = self._set_lm_parameters(model)
 
         unvisited_squares = self.lm_state[~self.lm_state['visited']]
+        if grid_id != -1:
+            unvisited_squares = unvisited_squares[unvisited_squares['grid_id'] == grid_id]
 
         unvisited_square_features = torch.tensor(unvisited_squares[['features']].to_numpy())
 
@@ -173,13 +225,10 @@ class Ptolemy_AL:
             ucb_probs = upper_confidence_bound(sample)
             unvisited_squares['GP_probs'] = ucb_probs.numpy()
 
-        if grid_id != -1:
-            return unvisited_squares[unvisited_squares['grid_id'] == grid_id]
-        else:
-            return unvisited_squares
+        return unvisited_squares
 
     
-    def run_mm_gp(self, candidate_holes=None, hole_ids=None, square_ids=None, save_candidate_holes=False):
+    def run_mm_gp(self, candidate_holes=None, hole_ids=None, square_ids=None, save_candidate_holes=False, active=False):
         # either run on all holes (all none) or candidate holes (you pass me the holes to run on)
         # or hole_ids (run only on these hole ids) or square ids (run on all unvisited holes with these square ids) TODO implement this
 
@@ -201,13 +250,17 @@ class Ptolemy_AL:
 
             if save_candidate_holes:
                 self.mm_state = pd.concat((self.mm_state, candidate_holes))
-
+        
+        elif active:
+            holes_to_run = self.mm_state.loc[list(self.active_holes)]
         elif hole_ids:
             holes_to_run = self.mm_state.loc[holes_to_run]
         elif square_ids:
-            holes_to_run = self.mm_state[self.mm_state['square_id'].isin(square_ids)]        
+            holes_to_run = self.mm_state[self.mm_state['square_id'].isin(square_ids)]
         else:
-            holes_to_run = self.mm_state[~self.mm_state['visited']]
+            holes_to_run = self.mm_state        
+        
+        holes_to_run = holes_to_run[~self.mm_state['visited']]
         
         unvisited_hole_features = torch.tensor(holes_to_run[['features']].to_numpy())
 
@@ -223,11 +276,13 @@ class Ptolemy_AL:
 
         return holes_to_run
 
+
     def add_hole_to_state(self, square_id, grid_id, center, features, prior_score, hole_id=None, visited=False, ctf=None, ice_thickness=None):
         if not hole_id:
             hole_id = len(self.mm_state)
         self.mm_state.loc[hole_id] = {'square_id': square_id, 'grid_id': grid_id, 'center': center, 'features': features, 'prior_score': prior_score, 'visited': visited, 'ctf': ctf, 'ice_thickness': ice_thickness}
         return hole_id
+
 
     def add_square_to_state(self, grid_id, center, features, prior_score, square_id=None, visited=False):
         if not square_id:
@@ -237,22 +292,38 @@ class Ptolemy_AL:
 
         self.lm_state.loc[square_id] = {'grid_id': grid_id, 'center': center, 'features': features, 'prior_score': prior_score, 'visited': visited}
 
+
     def visit_square(self, square_id):
         self.lm_state.loc[square_id, 'visited'] = True 
     
+
     def visit_hole(self, hole_id, ctf=None, ice_thickness=None, auto_mark_square_visited=True):
         self.mm_state.loc[hole_id, ['ctf', 'ice_thickness', 'visited']] = ctf, ice_thickness, True
 
         if auto_mark_square_visited:
             self.lm_state.loc[self.mm_state.loc[hole_id, 'square_id'], 'visited'] = True
 
+
     def mutate_lm_state(self, square_id, columnname, new_value):
         self.lm_state.loc[square_id, columnname] = new_value
+
 
     def mutate_mm_state(self, hole_id, columnname, new_value):
         self.mm_state.loc[hole_id, columnname] = new_value
 
+
     def _set_mm_parameters(self, model):
         model.load_state_dict(torch.load(self.settings['mm_gp_state_dict_path']))
         return model
+
+
+    def set_active_holes(self, hole_ids):
+        """
+        Convenience method for defining a set of "currently active holes", from the most recent medium-mag image.
+
+        run_mm_gp can be instructed to run on the active holes
+
+        Visited holes are automatically removed from the active holes set. 
+        """
+        self.active_holes = set(hole_ids)
 

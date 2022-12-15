@@ -35,7 +35,7 @@ def main():
     
     outputs = pipeline.process_lm_image(image)
 
-    _, centers, vertices, areas, intensities, _, scores = outputs
+    _, centers, vertices, areas, intensities, _, scores = outputs 
     
     if format_ == 'json':
         order = np.argsort(scores)[::-1]

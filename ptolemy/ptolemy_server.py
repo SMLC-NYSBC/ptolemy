@@ -45,6 +45,9 @@ class mm_image(BaseModel):
 class path(BaseModel):
     path: str
 
+class pathlist(BaseModel):
+    paths: list
+
 class single_float(BaseModel):
     value: float
 
@@ -60,6 +63,9 @@ class visit_hole_record(BaseModel):
 
 class visit_square_record(BaseModel):
     square_ids: int
+
+class list_of_ints(BaseModel):
+    ints: list
 
 
 @app.get('/')
@@ -88,23 +94,43 @@ def set_config(data: path):
     al_model.load_config(path)
 
 
-@app.post('/load_lm_state')
-def load_lm_state(data: path):
+@app.post('/append_lm_state')
+def append_lm_state(data: path):
     """
-    Load the low mag AL state. Currently assumes path points to a pickled dataframe
+    Appends state at path to current lm state. Currently assumes path points to a pickled dataframe
     Low mag state should be a dataframe with columns: 
         square_id, grid_id, center, features, prior_score, visited
     """
-    al_model.load_lm_state(data.path)
+    al_model.append_lm_state(data.path)
 
 
 @app.post('/load_mm_state')
-def load_mm_state(data: path):
+def append_mm_state(data: path):
     """
     Same as above for medium mag. medium mag state should be a dataframe with columns: 
         hole_id, square_id, grid_id, center, features, prior_score, visited, ctf, ice_thickness. 
     """
     al_model.load_mm_state(data.path)
+
+
+@app.post('/load_multi_lm_state')
+def load_multi_lm_state(data: pathlist):
+    """
+    load many lm_state paths
+    """
+    for path in data.paths:
+
+
+
+
+@app.post('/save_lm_state')
+def save_lm_state(data: path):
+    al_model.save_lm_state(data.path)
+
+
+@app.post('/save_mm_state')
+def save_mm_state(data: path):
+    al_model.save_mm_state(data.path)
 
 
 @app.post('/process_stateless_lm')
@@ -197,9 +223,21 @@ def push_and_evaluate_mm(data: mm_image):
         holes_to_run.append(hole_id)
 
     hole_results = al_model.run_mm_gp(hole_ids=holes_to_run)
+    al_model.set_active_holes(holes_to_run)
 
     return {'df': hole_results.to_csv()}
-    
+
+
+@app.get('/rerun_mm_on_active_holes')
+def rerun_mm_on_active_holes():
+    hole_results = al_model.run_mm_gp(active=True)
+    return {'df': hole_results.to_csv()}
+
+
+@app.post
+def rerun_mm_on_arbitrary_holes(data: list_of_ints):
+    hole_results = al_model.run_mm_gp(hole_ids = data.ints)
+    return {'df': hole_results.to_csv()}
 
 
 @app.post('/push_lm')
@@ -232,6 +270,8 @@ def push_mm(data: mm_image):
 def visit_holes(data: visit_hole_record):
     for hole_id, ctf, ice_thickness in zip(data.hole_ids, data.ctfs, data.ice_thicknesses):
         al_model.visit_hole(hole_id, ctf, ice_thickness)
+    
+    al_model.active_holes = al_model.active_holes - set(data.hole_ids)
 
 
 @app.post('/visit_squares')
