@@ -196,5 +196,5 @@ class BasicFixedDimModel(nn.Module):
     def score_batch(self, batch):
         with torch.no_grad():
             batch = torch.tensor(batch).float()
-            return self.forward(batch).flatten().detach().cpu().numpy()
+            return torch.sigmoid(self.forward(batch)).flatten().detach().cpu().numpy()
 

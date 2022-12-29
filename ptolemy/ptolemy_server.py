@@ -11,6 +11,7 @@ import pandas as pd
 from ptolemy.Ptolemy import Ptolemy
 from ptolemy.Ptolemy_AL import Ptolemy_AL
 from ptolemy.mrc import load_mrc
+from ptolemy.utils import prep_state_for_csv
 
 # parser = argparse.ArgumentParser()
 # parser.add_argument('-c', '--config', default='default', help='path to config file')
@@ -35,11 +36,13 @@ class image(BaseModel):
 
 class lm_image(BaseModel):
     grid_id: int
+    tile_id: int = None
     image: list
 
 class mm_image(BaseModel):
     grid_id: int
     square_id: int
+    mm_img_id: int = None
     image: list
 
 class path(BaseModel):
@@ -62,27 +65,33 @@ class visit_hole_record(BaseModel):
     ice_thicknesses: list
 
 class visit_square_record(BaseModel):
-    square_ids: int
+    square_id: int
 
 class list_of_ints(BaseModel):
     ints: list
+
+
+class init_new_session(BaseModel):
+    new_state_path: str = None
+    historical_state_paths: list = []
+    save_state_path: str = None
 
 
 @app.get('/')
 def main():
     return {'message': 'Welcome'}
 
-@app.get('/{name}')
-def hello_name(name: str):
-    return {'message': f'Welcome, {name}'}
+# @app.get('/{name}')
+# def hello_name(name: str):
+#     return {'message': f'Welcome, {name}'}
 
-@app.post('/predict')
-def predict(data: image):
+@app.get('/predict')
+def predict():
     # return {'image': data.image}
     # basic_df = pd.DataFrame({'x': [1, 2, 3], 'n': [4, 5, 6]})
     # image = pd.read_csv(io.StringIO(data.path), index_col='x')
     # return {'image': image.to_csv()}
-    return {"image": data.image}
+    return [0, 1, 2, 3]
 
 @app.post('/set_config')
 def set_config(data: path):
@@ -90,47 +99,69 @@ def set_config(data: path):
     Sets the model and al configs based on path
     path should probably be an absolute path
     """
-    base_model.load_config_and_models(path)
-    al_model.load_config(path)
+    base_model.load_config_and_models(data.path)
+    al_model.load_config(data.path)
 
 
-@app.post('/append_lm_state')
-def append_lm_state(data: path):
+@app.post('/load_historical_state')
+def append_historical_state(data: path):
     """
-    Appends state at path to current lm state. Currently assumes path points to a pickled dataframe
-    Low mag state should be a dataframe with columns: 
-        square_id, grid_id, center, features, prior_score, visited
+    Appends state at path to historical state. Currently assumes path points to a pickled dataframe
     """
-    al_model.append_lm_state(data.path)
+    al_model.append_historical_state(data.path)
 
 
-@app.post('/load_mm_state')
-def append_mm_state(data: path):
-    """
-    Same as above for medium mag. medium mag state should be a dataframe with columns: 
-        hole_id, square_id, grid_id, center, features, prior_score, visited, ctf, ice_thickness. 
-    """
-    al_model.load_mm_state(data.path)
-
-
-@app.post('/load_multi_lm_state')
-def load_multi_lm_state(data: pathlist):
-    """
-    load many lm_state paths
-    """
+@app.post('/append_multi_historical_states')
+def append_multi_historical_states(data: pathlist):
     for path in data.paths:
+        al_model.append_historical_state(path)
 
 
+@app.post('/overwrite_current_state')
+def overwrite_current_state(data: path):
+    """
+    Overwrites current state with state at path
+    """
+    al_model.overwrite_current_state(data.path)
 
 
-@app.post('/save_lm_state')
-def save_lm_state(data: path):
-    al_model.save_lm_state(data.path)
+@app.get('/clear_current_state')
+def clear_current_state():
+    """
+    Clears the current state
+    """
+    al_model.clear_current_state()
 
 
-@app.post('/save_mm_state')
-def save_mm_state(data: path):
-    al_model.save_mm_state(data.path)
+@app.get('/clear_historical_state')
+def clear_historical_state():
+    al_model.clear_historical_state()
+
+
+@app.post('/initialize_new_session')
+def initialize_new_session(data: init_new_session):
+    al_model.initialize_new_session(data.new_state_path, data.historical_state_paths, data.save_state_path)
+
+@app.get('/initialize_new_session')
+def initialize_new_session():
+    al_model.initialize_new_session()
+
+
+@app.post('/append_current_state')
+def append_current_state(data: path):
+    """
+    Appends state at path to current state
+    This should be done with caution. Ideally, current state should always be in one dataframe, and should always be saved and loaded as a complete whole, so only overwrite_current_state should be needed. Appending here means you have squares for the current session (accessible on this grid/cassette) that were saved across multiple states. 
+    """
+    al_model.append_current_state(data.path)
+
+
+@app.post('/save_state')
+def save_state(data: path):
+    """
+    Saves the current AL state
+    """
+    al_model.save_state(data.path)
 
 
 @app.post('/process_stateless_lm')
@@ -175,10 +206,10 @@ def process_stateless_mm(data: image):
     js = []
     for i in order:
         d = {}
-        d['vertices'] = boxes[i]
+        d['vertices'] = boxes[i].tolist()
         d['center'] = centers[i]
         d['score'] = float(prior_scores[i])
-        d['radius'] = radius
+        d['radius'] = float(radius)
         d['features'] = features[i].tolist()
 
         # probably have to verify types here
@@ -188,7 +219,7 @@ def process_stateless_mm(data: image):
     return js
 
 
-@app.post('/select_next_square')
+@app.post('/select_next_square') # need a better name for this
 def select_next_square(data: single_int):
     """
     Asks the server to return the dataframe with the information for picking the next square
@@ -202,9 +233,9 @@ def select_next_square(data: single_int):
     Let's default to returning the whole dataframe
 
     On the other end, to correctly unpack this dataframe, call
-    pd.read_csv(io.StringIo(request['df']), index_col='square_id')
+    pd.read_csv(io.StringIo(request.json()), index_col='square_id')
     """
-    return {'df': unvisited_squares.to_csv()}
+    return prep_state_for_csv(unvisited_squares).to_csv()
 
 
 @app.post('/push_and_evaluate_mm')
@@ -219,25 +250,25 @@ def push_and_evaluate_mm(data: mm_image):
 
     holes_to_run = []
     for center, feature, prior_score in zip(centers, features, prior_scores):
-        hole_id = al_model.add_hole_to_state(data.square_id, data.grid_id, center, feature, prior_score)
+        hole_id = al_model.add_hole_to_state(data.square_id, data.grid_id, data.mm_img_id, center, feature, prior_score, radius)
         holes_to_run.append(hole_id)
 
     hole_results = al_model.run_mm_gp(hole_ids=holes_to_run)
     al_model.set_active_holes(holes_to_run)
 
-    return {'df': hole_results.to_csv()}
+    return prep_state_for_csv(hole_results).to_csv()
 
 
 @app.get('/rerun_mm_on_active_holes')
 def rerun_mm_on_active_holes():
     hole_results = al_model.run_mm_gp(active=True)
-    return {'df': hole_results.to_csv()}
+    return prep_state_for_csv(hole_results).to_csv()
 
-
-@app.post
+ 
+@app.post('/rerun_mm_on_arbitrary_holes')
 def rerun_mm_on_arbitrary_holes(data: list_of_ints):
     hole_results = al_model.run_mm_gp(hole_ids = data.ints)
-    return {'df': hole_results.to_csv()}
+    return prep_state_for_csv(hole_results).to_csv()
 
 
 @app.post('/push_lm')
@@ -249,7 +280,7 @@ def push_lm(data: lm_image):
     raw_crops, centers, vertices, areas, mean_intensities, features, prior_scores = base_model.process_lm_image(image)
 
     for center, feature, prior_score in zip(centers, features, prior_scores):
-        al_model.add_square_to_state(data.grid_id, center, feature, prior_score)
+        al_model.add_square_to_state(data.grid_id, data.tile_id, center, feature, prior_score, vertices)
 
 
 @app.post('/push_mm')
@@ -263,7 +294,7 @@ def push_mm(data: mm_image):
     crops, centers, boxes, radius, features, prior_scores = base_model.process_mm_image(image)
 
     for center, feature, prior_score in zip(centers, features, prior_scores):
-        al_model.add_hole_to_state(data.square_id, data.grid_id, center, feature, prior_score)
+        al_model.add_hole_to_state(data.square_id, data.grid_id, data.mm_img_id, center, feature, prior_score, radius)
 
 
 @app.post('/visit_holes')
@@ -274,8 +305,18 @@ def visit_holes(data: visit_hole_record):
     al_model.active_holes = al_model.active_holes - set(data.hole_ids)
 
 
-@app.post('/visit_squares')
-def visit_squares(data: visit_square_record):
+@app.get('/current_lm_state')
+def current_lm_state():
+    return prep_state_for_csv(al_model.current_lm_state).to_csv()
+
+
+@app.get('/current_mm_state')
+def current_mm_state():
+    return prep_state_for_csv(al_model.current_mm_state).to_csv()
+
+
+@app.post('/visit_square')
+def visit_square(data: visit_square_record):
     al_model.visit_square(data.square_id)
 
 

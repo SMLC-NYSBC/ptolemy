@@ -49,7 +49,7 @@ class Ptolemy:
         self.mm_segmenter = models.BasicUNet(64, 9)
         self.mm_segmenter.load_state_dict(torch.load(self.settings['mm_segmentation_model_path']))
 
-        self.mm_feature_extraction_model = models.Hole_Classifier_Multitask(6, 256)
+        self.mm_feature_extraction_model = models.Hole_Classifier_Multitask(7, 256)
         self.mm_feature_extraction_model.load_state_dict(torch.load(self.settings['mm_feature_extraction_model_path']))
 
         self.mm_prior_model = models.BasicFixedDimModel(5, 300, 300)
