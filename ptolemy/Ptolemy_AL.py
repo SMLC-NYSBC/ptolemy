@@ -94,6 +94,7 @@ class Ptolemy_AL:
         
         self.load_config(config_path)
         self.current_active_holes = set()
+        self.device = self.settings['device']
 
     
     def load_config(self, config_path):
@@ -141,6 +142,10 @@ class Ptolemy_AL:
     def clear_historical_state(self):
         self.historical_lm_state = []
         self.historical_mm_state = []
+
+    
+    def set_device(self, device):
+        self.device = device
 
 
     def initialize_new_session(self, new_state_path=None, historical_state_paths=[], save_state_path=None):
@@ -232,8 +237,8 @@ class Ptolemy_AL:
                 counts = (holes.ctf < 5).sum()
                 train_y.append(counts)
 
-        train_x = torch.tensor(np.stack(train_x)).float()
-        train_y = torch.tensor(train_y).float()
+        train_x = torch.tensor(np.stack(train_x)).float().to(self.device)
+        train_y = torch.tensor(train_y).float().to(self.device)
 
         likelihood = gpytorch.likelihoods.GaussianLikelihood().float()
         model = SingleTaskGP(train_x, train_y, likelihood).float()
@@ -244,13 +249,13 @@ class Ptolemy_AL:
         if grid_id != -1:
             unvisited_squares = unvisited_squares[unvisited_squares['grid_id'] == grid_id]
 
-        unvisited_square_features = torch.tensor(np.stack(unvisited_squares['features'].values)).float()
+        unvisited_square_features = torch.tensor(np.stack(unvisited_squares['features'].values)).float().to(self.device)
 
-        model.eval()
-        likelihood.eval()
+        model.eval().to(self.device)
+        likelihood.eval().to(self.device)
 
         with torch.no_grad():
-            sample = likelihood(model(unvisited_square_features))
+            sample = likelihood(model(unvisited_square_features)).cpu()
             ucb_probs = upper_confidence_bound(sample)
             unvisited_squares['GP_probs'] = ucb_probs
 
@@ -281,11 +286,16 @@ class Ptolemy_AL:
                     historical_train_y.append(train_y)
                     train_x = torch.cat(historical_train_x)
                     train_y = torch.cat(historical_train_y)
+
+            train_x = train_x.to(self.device)
+            train_y = train_y.to(self.device)
             
             likelihood = gpytorch.likelihoods.MultitaskGaussianLikelihood(num_tasks=2).float()
             model = MultitaskGP(train_x, train_y, likelihood, n_tasks=2).float()
             
             model = self._set_mm_parameters(model)
+            model = model.to(self.device)
+            likelihood = likelihood.to(self.device)
             # model = model.double()
             # likelihood = likelihood.double()
 
@@ -306,14 +316,14 @@ class Ptolemy_AL:
         else:
             holes_to_run = self.current_mm_state[~self.current_mm_state['visited']]      
                 
-        unvisited_hole_features = torch.tensor(np.stack(holes_to_run['features'].values)).float()
+        unvisited_hole_features = torch.tensor(np.stack(holes_to_run['features'].values)).float().to(self.device)
 
         if len(visited_holes) > 1:
             model.eval()
             likelihood.eval()
 
             with torch.no_grad():
-                sample = likelihood(model(unvisited_hole_features))
+                sample = likelihood(model(unvisited_hole_features)).cpu()
                 holes_to_run['ctf_pred'] = sample.mean[:, 1]
                 holes_to_run['ice_pred'] = sample.mean[:, 0]
                 holes_to_run['ctf_var'] = sample.variance[:, 1]

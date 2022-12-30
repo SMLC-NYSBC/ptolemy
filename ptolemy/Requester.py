@@ -38,6 +38,10 @@ class Ptolemy_Requester():
         }
         self.post_request('set_noice_hole_intensity', payload)
 
+    
+    def set_config(self, path):
+        self.pass_path('set_config', path)
+
 
     def push_lm(self, image, grid_id : int, tile_id : int = None):
         payload = {
