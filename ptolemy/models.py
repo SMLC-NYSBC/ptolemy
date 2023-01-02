@@ -42,7 +42,7 @@ class LowMag_64x5_2ep(nn.Module):
 
     def score_crops(self, preprocessed_crops):
         with torch.no_grad():
-            batch = torch.tensor(np.array(preprocessed_crops)).unsqueeze(1).float().to(self.layer1.device)
+            batch = torch.tensor(np.array(preprocessed_crops)).unsqueeze(1).float().to(next(self.layer1.parameters()).device)
             return self.forward(batch).detach().cpu().numpy().flatten()
         #     scores = []
         #     for crop in preprocessed_crops:
@@ -86,7 +86,7 @@ class BasicUNet(nn.Module):
 
     def get_mask(self, mm_image):
         with torch.no_grad():
-            mm_image = torch.tensor(mm_image).unsqueeze(0).unsqueeze(0).float().to(self.last.device)
+            mm_image = torch.tensor(mm_image).unsqueeze(0).unsqueeze(0).float().to(next(self.last.parameters()).device)
             output = self.forward(mm_image).detach().cpu().numpy()[0, 0]
         return output
 
@@ -156,7 +156,7 @@ class Hole_Classifier_Multitask(nn.Module):
 
     def extract_features(self, batch):
         with torch.no_grad():
-            batch = torch.tensor(batch).float().to(self.final1.device)
+            batch = torch.tensor(batch).float().to(next(self.final1.parameters()).device)
             return self.get_activations(batch).squeeze().detach().cpu().numpy()
 
 class BasicFixedDimModel(nn.Module):
@@ -195,6 +195,6 @@ class BasicFixedDimModel(nn.Module):
 
     def score_batch(self, batch):
         with torch.no_grad():
-            batch = torch.tensor(batch).float().to(self.final.device)
+            batch = torch.tensor(batch).float().to(next(self.final.parameters()).device)
             return torch.sigmoid(self.forward(batch)).flatten().detach().cpu().numpy()
 
