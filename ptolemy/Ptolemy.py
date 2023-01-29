@@ -24,7 +24,7 @@ import models
 
 class Ptolemy:
     """
-    Base class for static Ptolemy models. Stateless. Use for prior model scores, feature extraction and hole/square detection. 
+    Base class for static Ptolemy models. semi-Stateless. Use for prior model scores, feature extraction and hole/square detection. 
 
     Main functions are 
         load_models
@@ -32,6 +32,8 @@ class Ptolemy:
         process_mm_image
 
     But you can also optionally only load/run parts of this class such as the constitutent functions in process_lm_image and process_mm_image
+    
+    Note that noice_hole_intensity is an important parameter and should be set for each session. If it not set, the model will default to using the 1.2*(90th percentile pixel intensity) as the no-ice-pixel-intensity for each image. 
     """
 
     def __init__(self, config='default'):
@@ -357,8 +359,16 @@ class Ptolemy:
     def mm_crops_to_preprocessed_batch(self, crops, radius):
         rescaled_crops = [self._mm_resize_to_radius(crop, radius, self.settings['target_hole_radius']) for crop in crops]
         if 'noice_hole_intensity' not in self.settings.keys():
-            raise AttributeError('No-ice hole pixel intensity not set')
-        rescaled_crops = [crop / self.settings['noice_hole_intensity'] for crop in rescaled_crops]
+            print('Warning: no-ice hole pixel intensity not set. Defaulting to 1.2 * (90th percentile pixel intensity) as the normalization factor')
+            all_pixels_flat = []
+            for crop in crops:
+                all_pixels_flat.append(crop.flatten())
+            all_pixels_flat = np.concatenate(all_pixels_flat)
+            norm_factor = 1.2 * np.nanpercentile(all_pixels_flat, 90)
+            rescaled_crops = [crop / norm_factor for crop in rescaled_crops]
+        
+        else:
+            rescaled_crops = [crop / self.settings['noice_hole_intensity'] for crop in rescaled_crops]
 
         batch = self._crops_to_fixed_size_batch(rescaled_crops, self.settings['mm_input_crop_size'])
         return batch
