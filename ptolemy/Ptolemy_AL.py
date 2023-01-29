@@ -6,6 +6,8 @@ import pandas as pd
 import torch
 import gpytorch
 
+from ptolemy.utils import prep_state_for_csv
+
 
 class SingleTaskGP(gpytorch.models.ExactGP):
     def __init__(self, train_x, train_y, likelihood):
@@ -69,33 +71,21 @@ class Ptolemy_AL:
     At some point should probably do some experiments that show this is better
     """
 
-    def __init__(self, config='default', historical_lm_state=None, historical_mm_state=None, current_lm_state=None, current_mm_state=None):
-        # we enforce lm_state to have "square_id" be the index
-        if not historical_lm_state:
-            self.historical_lm_state = pd.DataFrame(columns= ['square_id', 'grid_id', 'center', 'features', 'prior_score', 'visited'])
+    def __init__(self, config='default', historical_state_paths=[], current_state_path=None):
+        self.historical_lm_state = []
+        self.historical_mm_state = []
+
+        for path in historical_state_paths:
+            self.append_historical_state(path)
+
+        if current_state_path is None:
+            self.current_lm_state = pd.DataFrame(columns= ['square_id', 'tile_id', 'grid_id', 'center_x', 'center_y', 'features', 'prior_score', 'visited', 'vert_1_x', 'vert_1_y', 'vert_2_x', 'vert_2_y', 'vert_3_x', 'vert_3_y', 'vert_4_x', 'vert_4_y'])
+            self.current_lm_state = self.current_lm_state.set_index('square_id')
+
+            self.current_mm_state = pd.DataFrame(columns= ['hole_id', 'mm_img_id', 'square_id', 'grid_id', 'center_x', 'center_y', 'features', 'radius', 'prior_score', 'visited', 'ctf', 'ice_thickness'])
+            self.current_mm_state = self.current_mm_state.set_index('hole_id')
         else:
-            self.historical_lm_state = historical_lm_state
-
-        if not current_lm_state:
-            self.current_lm_state = pd.DataFrame(columns= ['square_id', 'grid_id', 'center', 'features', 'prior_score', 'visited'])
-        else:
-            self.current_lm_state = current_lm_state
-
-        # if self.lm_state.index.name != 'square_id':
-        #     self.lm_state = self.lm_state.set_index('square_id')
-
-        if not historical_mm_state:
-            self.historical_mm_state = pd.DataFrame(columns= ['hole_id', 'square_id', 'grid_id', 'center', 'features', 'prior_score', 'visited', 'ctf', 'ice_thickness'])
-        else:
-            self.historical_mm_state = historical_mm_state
-
-        if not historical_mm_state:
-            self.historical_mm_state = pd.DataFrame(columns= ['hole_id', 'square_id', 'grid_id', 'center', 'features', 'prior_score', 'visited', 'ctf', 'ice_thickness'])
-        else:
-            self.historical_mm_state = historical_mm_state
-
-        # if self.mm_state.index.name != 'hole_id':
-        #     self.mm_state = self.mm_state.set_index('hole_id')
+            self.current_lm_state, self.current_mm_state = self.load_state(current_state_path)
 
         if config == 'default':
             config_path = os.path.dirname(os.path.realpath(__file__)) + '/default_config.json'
@@ -104,68 +94,104 @@ class Ptolemy_AL:
         
         self.load_config(config_path)
         self.current_active_holes = set()
+        self.device = self.settings['device']
 
     
     def load_config(self, config_path):
         self.settings = json.load(open(config_path, 'r'))
 
 
-    def _load_state(self, path):
-        # logic for loading states. Currently, assumes a pickle
-        return pd.read_pickle(path)
+    def load_state(self, path):
+        lm_state = pd.read_csv(path + '/lmstate.csv', index_col='square_id')
+        mm_state = pd.read_csv(path + '/mmstate.csv', index_col='hole_id')
 
-    def _save_state(self, state, path):
-        # logic for saving states, currently assumes a pickle
-        state.to_pickle(path)
+        lm_feats = np.load(path + '/lm_feats.npy')
+        lm_state['features'] = lm_feats
+        mm_feats = np.load(path + '/mm_feats.npy')
+        mm_state['features'] = mm_feats
 
-
-    def load_historical_lm_state(self, lm_state_path):
-        """
-        Appends path in lm_state_path to the historical_lm_state
-        """
-        self.historical_lm_state = pd.concat((self.historical_lm_state, self._load_state(lm_state_path)))
+        return lm_state, mm_state
 
     
-    def load_historical_mm_state(self, mm_state_path):
-        """
-        Appends path in mm_state_path to the historical_lm_state
-        """
-        self.historical_mm_state = pd.concat((self.historical_lm_state, self._load_state(mm_state_path)))
+    def append_historical_state(self, path):
+        lm_state, mm_state = self.load_state(path)
+        self.historical_lm_state.append(lm_state)
+        self.historical_mm_state.append(mm_state)
+
+
+    def save_state(self, path):
+        if not os.isdir(path):
+            os.mkdir(path)
+
+        prep_state_for_csv(self.current_lm_state).to_csv(path + '/lmstate.csv')
+        prep_state_for_csv(self.current_mm_state).to_csv(path + '/mmstate.csv')
+        np.save(path + '/lm_feats.npy', np.stack(self.current_lm_state.features.values))
+        np.save(path + '/mm_feats.npy', np.stack(self.current_mm_state.features.values))
+
+
+
+    def overwrite_current_state(self, path):
+        self.current_lm_state, self.current_mm_state = self.load_state(path)
 
     
-    def load_current_lm_state(self, lm_state_path):
-        """
-        Loads and overwrites existing current_lm_state from reading lm_state_path dataframe pickle
-        """
-        self.current_lm_state = self._load_state(lm_state_path)
+    def clear_current_state(self):
+        self.current_lm_state = self.current_lm_state[0:0]
+        self.current_mm_state = self.current_mm_state[0:0]
 
     
-    def load_current_mm_state(self, mm_state_path):
-        """
-        Loads and overwrites existing current_mm_state from reading mm_state_path dataframe pickle
-        """
-        self.current_mm_state = self._load_state(mm_state_path)
-
-
-    def save_lm_state(self, path):
-        self._save_state(self.current_lm_state, path)
+    def clear_historical_state(self):
+        self.historical_lm_state = []
+        self.historical_mm_state = []
 
     
-    def save_mm_state(self, mm_state_path):
-        self._save_state(self.current_mm_state, path)
+    def set_device(self, device):
+        self.device = device
+
+
+    def initialize_new_session(self, new_state_path=None, historical_state_paths=[], save_state_path=None):
+        """
+        clears the current state and historical state, optionally saves the current state and loads new current and historical states.         
+        """
+        if save_state_path: self.save_state(save_state_path)
+
+        self.clear_current_state()
+        if new_state_path: self.load_state(new_state_path)
+        
+        self.clear_historical_state()
+        if len(historical_state_paths) > 0: [self.append_historical_state(path) for path in historical_state_paths]
+
+
+    def append_current_state(self, path):
+        """
+        This should be used with caution. Ideally, current state should always be in one dataframe, and should always be saved and loaded as a complete whole. Appending here means you have squares for the current session (accessible on this grid/cassette) that were saved across multiple states. 
+        """    
+
+        # TODO raise a warning
+        lm_state, mm_state = self.load_state(path)
+        self.current_lm_state = pd.concat((self.current_lm_state, lm_state))
+        self.current_mm_state = pd.concat((self.current_mm_state, mm_state))
 
 
     def compute_lengthscale(self):
         # Low mag lengthscale is computed just based on the square features alone. 
         # No visiting required.
-        lengthscale = np.quantile(np.stack(self.lm_state.features.values), q=0.25, axis=0)
+        features = np.stack(self.current_lm_state.features.values)
+        if len(self.historical_lm_state) > 0:
+            features_cat = []
+            for lm_state in self.historical_lm_state:
+                features_cat.append(np.stack(lm_state.features.values))
+
+            features_cat.append(features)
+            features = np.cat(features_cat)
+        
+        lengthscale = np.quantile(features, q=0.25, axis=0)
         return torch.tensor(lengthscale).unsqueeze(0)
 
 
     def _set_lm_parameters(self, model):
         model.mean_module.constant = torch.nn.Parameter(torch.tensor([float(self.settings['lm_gp_mean_constant'])])) # default should be 20 for now
-        all_square_features = torch.tensor(self.lm_state[['features']].to_numpy())
-        model.covar_module.base_kernel.raw_lengthscale = torch.nn.Parameter(torch.quantile(all_square_features, q=0.25, dim=0).unsqueeze(0))
+        all_square_features = torch.tensor(np.stack(self.current_lm_state['features'].values).astype('float'))
+        model.covar_module.base_kernel.raw_lengthscale = torch.nn.Parameter(torch.quantile(all_square_features, q=0.25, dim=0).unsqueeze(0).float())
         model.likelihood.noise_covar.raw_noise = torch.nn.Parameter(torch.tensor([float(self.settings['lm_gp_noise_constant'])])) # default should be 15
         model.covar_module.outputscale = float(self.settings['lm_gp_outputscale']) # default should be 500
         
@@ -194,8 +220,8 @@ class Ptolemy_AL:
 
         train_x, train_y = [], []
 
-        visited_holes = self.mm_state[self.mm_state['visited']].dropna(subset=['features', 'ctf', 'ice_thickness'])
-        visited_squares = self.lm_state[self.lm_state['visited']].dropna(subset=['features'])
+        visited_holes = self.current_mm_state[self.current_mm_state['visited']].dropna(subset=['features', 'ctf', 'ice_thickness'])
+        visited_squares = self.current_lm_state[self.current_lm_state['visited']].dropna(subset=['features'])
 
         for square_id, row in visited_squares.iterrows():
             train_x.append(row.features)
@@ -203,27 +229,35 @@ class Ptolemy_AL:
             counts = (holes.ctf < 5).sum()
             train_y.append(counts)
 
-        train_x = torch.tensor(train_x)
-        train_y = torch.tensor(train_y)
+        for lm_state, mm_state in zip(self.historical_lm_state, self.historical_mm_state):
+            for square_id, row in lm_state[lm_state['visited']].dropna(subset=['features']):
+                train_x.append(row.features)
+                visited_holes = mm_state[mm_state['visited']].dropna(subset=['features', 'ctf', 'ice_thickness'])
+                holes = visited_holes[visited_holes.square_id == square_id]
+                counts = (holes.ctf < 5).sum()
+                train_y.append(counts)
 
-        likelihood = gpytorch.likelihoods.GaussianLikelihood()
-        model = SingleTaskGP(train_x, train_y, likelihood)
+        train_x = torch.tensor(np.stack(train_x)).float().to(self.device)
+        train_y = torch.tensor(train_y).float().to(self.device)
+
+        likelihood = gpytorch.likelihoods.GaussianLikelihood().float()
+        model = SingleTaskGP(train_x, train_y, likelihood).float()
 
         model = self._set_lm_parameters(model)
 
-        unvisited_squares = self.lm_state[~self.lm_state['visited']]
+        unvisited_squares = self.current_lm_state[~self.current_lm_state['visited']]
         if grid_id != -1:
             unvisited_squares = unvisited_squares[unvisited_squares['grid_id'] == grid_id]
 
-        unvisited_square_features = torch.tensor(unvisited_squares[['features']].to_numpy())
+        unvisited_square_features = torch.tensor(np.stack(unvisited_squares['features'].values)).float().to(self.device)
 
-        model.eval()
-        likelihood.eval()
+        model.eval().to(self.device)
+        likelihood.eval().to(self.device)
 
         with torch.no_grad():
-            sample = likelihood(model(unvisited_square_features))
+            sample = likelihood(model(unvisited_square_features)).cpu()
             ucb_probs = upper_confidence_bound(sample)
-            unvisited_squares['GP_probs'] = ucb_probs.numpy()
+            unvisited_squares['GP_probs'] = ucb_probs
 
         return unvisited_squares
 
@@ -233,15 +267,37 @@ class Ptolemy_AL:
         # or hole_ids (run only on these hole ids) or square ids (run on all unvisited holes with these square ids) TODO implement this
 
         # do the same thing as run_lm but for mm
-        visited_holes = self.mm_state[(self.mm_state['visited'])].dropna(subset=['features', 'ctf', 'ice_thickness'])
+        visited_holes = self.current_mm_state[(self.current_mm_state['visited'])].dropna(subset=['features', 'ctf', 'ice_thickness'])
 
-        train_x = torch.tensor(visited_holes[['features']].to_numpy())
-        train_y = torch.tensor(visited_holes[['ctf, ice_thickness']].to_numpy())
+        if len(visited_holes) > 1:
+            train_x = torch.tensor(np.stack(visited_holes['features'].values)).float()
+            train_y = torch.tensor(np.stack(visited_holes[['ice_thickness', 'ctf']].values).astype('float')).float()
 
-        likelihood = gpytorch.likelihoods.GaussianLikelihood()
-        model = SingleTaskGP(train_x, train_y, likelihood)
-        
-        model = self._set_mm_parameters(model)
+            if len(self.historical_lm_state) > 0:
+                historical_train_x = []
+                historical_train_y = []
+                for mm_state in self.historical_mm_state:
+                    visited_holes = mm_state[(mm_state['visited'])].dropna(subset=['features', 'ctf', 'ice_thickness'])
+                    historical_train_x.append(torch.tensor(np.stack(visited_holes['features'].values)).float())
+                    historical_train_y.append(torch.tensor(np.stack(visited_holes[['ice_thickness', 'ctf']].values).astype('float')).float())
+
+                if len(historical_train_x) > 0:
+                    historical_train_x.append(train_x)
+                    historical_train_y.append(train_y)
+                    train_x = torch.cat(historical_train_x)
+                    train_y = torch.cat(historical_train_y)
+
+            train_x = train_x.to(self.device)
+            train_y = train_y.to(self.device)
+            
+            likelihood = gpytorch.likelihoods.MultitaskGaussianLikelihood(num_tasks=2).float()
+            model = MultitaskGP(train_x, train_y, likelihood, n_tasks=2).float()
+            
+            model = self._set_mm_parameters(model)
+            model = model.to(self.device)
+            likelihood = likelihood.to(self.device)
+            # model = model.double()
+            # likelihood = likelihood.double()
 
         # If candidate_holes is None, run the model on all unvisited holes
         # Else, add candidate holes to mm_state and only run model on candidate holes
@@ -249,67 +305,72 @@ class Ptolemy_AL:
             holes_to_run = candidate_holes
 
             if save_candidate_holes:
-                self.mm_state = pd.concat((self.mm_state, candidate_holes))
+                self.current_mm_state = pd.concat((self.current_mm_state, candidate_holes))
         
         elif active:
-            holes_to_run = self.mm_state.loc[list(self.active_holes)]
+            holes_to_run = self.current_mm_state.loc[list(self.active_holes)]
         elif hole_ids:
-            holes_to_run = self.mm_state.loc[holes_to_run]
+            holes_to_run = self.current_mm_state.loc[hole_ids]
         elif square_ids:
-            holes_to_run = self.mm_state[self.mm_state['square_id'].isin(square_ids)]
+            holes_to_run = self.current_mm_state[self.current_mm_state['square_id'].isin(square_ids)]
         else:
-            holes_to_run = self.mm_state        
-        
-        holes_to_run = holes_to_run[~self.mm_state['visited']]
-        
-        unvisited_hole_features = torch.tensor(holes_to_run[['features']].to_numpy())
+            holes_to_run = self.current_mm_state[~self.current_mm_state['visited']]      
+                
+        unvisited_hole_features = torch.tensor(np.stack(holes_to_run['features'].values)).float().to(self.device)
 
-        model.eval()
-        likelihood.eval()
+        if len(visited_holes) > 1:
+            model.eval()
+            likelihood.eval()
 
-        with torch.no_grad():
-            sample = likelihood(model(unvisited_hole_features))
-            holes_to_run['ctf_pred'] = sample.mean[:, 0]
-            holes_to_run['ice_pred'] = sample.mean[:, 1]
-            holes_to_run['ctf_var'] = sample.variance[:, 0]
-            holes_to_run['ice_var'] = sample.variance[:, 1]
+            with torch.no_grad():
+                sample = likelihood(model(unvisited_hole_features)).cpu()
+                holes_to_run['ctf_pred'] = sample.mean[:, 1]
+                holes_to_run['ice_pred'] = sample.mean[:, 0]
+                holes_to_run['ctf_var'] = sample.variance[:, 1]
+                holes_to_run['ice_var'] = sample.variance[:, 0]
+
+        else:
+            holes_to_run['ctf_pred'] = 2.0
+            holes_to_run['ice_pred'] = 50.0
+            holes_to_run['ctf_var'] = 1.0
+            holes_to_run['ice_var'] = 20.0
 
         return holes_to_run
 
 
-    def add_hole_to_state(self, square_id, grid_id, center, features, prior_score, hole_id=None, visited=False, ctf=None, ice_thickness=None):
+    def add_hole_to_state(self, square_id, grid_id, mm_img_id, center, features, prior_score, radius=None, hole_id=None, visited=False, ctf=None, ice_thickness=None):
         if not hole_id:
-            hole_id = len(self.mm_state)
-        self.mm_state.loc[hole_id] = {'square_id': square_id, 'grid_id': grid_id, 'center': center, 'features': features, 'prior_score': prior_score, 'visited': visited, 'ctf': ctf, 'ice_thickness': ice_thickness}
+            hole_id = len(self.current_mm_state)
+        self.current_mm_state.loc[hole_id] = {'square_id': square_id, 'grid_id': grid_id, 'mm_img_id': mm_img_id, 'center_x': center[0], 'center_y':center[1], 'features': features, 'prior_score': prior_score, 'radius': radius,'visited': visited, 'ctf': ctf, 'ice_thickness': ice_thickness}
         return hole_id
 
 
-    def add_square_to_state(self, grid_id, center, features, prior_score, square_id=None, visited=False):
+    def add_square_to_state(self, grid_id, tile_id, center, features, prior_score, vertices, square_id=None, visited=False):
         if not square_id:
-            square_id = len(self.lm_state)
+            square_id = len(self.current_lm_state)
 
         # check uniqueness of square id here
 
-        self.lm_state.loc[square_id] = {'grid_id': grid_id, 'center': center, 'features': features, 'prior_score': prior_score, 'visited': visited}
+        self.current_lm_state.loc[square_id] = {'grid_id': grid_id, 'tile_id': tile_id, 'center_x': center[0], 'center_y': center[1], 'vert_1_x': vertices[0][0], 'vert_1_y': vertices[0][1], 'vert_2_x': vertices[1][0], 'vert_2_y': vertices[1][1], 'vert_3_x': vertices[2][0], 'vert_3_y': vertices[2][1], 'vert_4_x': vertices[3][0], 'vert_4_y': vertices[3][1], 'features': features, 'prior_score': prior_score, 'visited': visited}
 
 
     def visit_square(self, square_id):
-        self.lm_state.loc[square_id, 'visited'] = True 
+        self.current_lm_state.loc[square_id, 'visited'] = True 
     
 
     def visit_hole(self, hole_id, ctf=None, ice_thickness=None, auto_mark_square_visited=True):
-        self.mm_state.loc[hole_id, ['ctf', 'ice_thickness', 'visited']] = ctf, ice_thickness, True
+        self.current_mm_state.loc[hole_id, ['ctf', 'ice_thickness', 'visited']] = ctf, ice_thickness, True
 
         if auto_mark_square_visited:
-            self.lm_state.loc[self.mm_state.loc[hole_id, 'square_id'], 'visited'] = True
+            self.current_lm_state.loc[self.current_mm_state.loc[hole_id, 'square_id'], 'visited'] = True
 
 
     def mutate_lm_state(self, square_id, columnname, new_value):
-        self.lm_state.loc[square_id, columnname] = new_value
+        self.current_lm_state.loc[square_id, columnname] = new_value
 
 
     def mutate_mm_state(self, hole_id, columnname, new_value):
-        self.mm_state.loc[hole_id, columnname] = new_value
+        self.current_mm_state.loc[hole_id, columnname] = new_value
 
 
     def _set_mm_parameters(self, model):

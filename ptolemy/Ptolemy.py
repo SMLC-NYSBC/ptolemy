@@ -45,15 +45,19 @@ class Ptolemy:
     def load_models(self):
         self.lm_classification_model = models.LowMag_64x5_2ep()
         self.lm_classification_model.load_state_dict(torch.load(self.settings['lm_prior_classication_model_path']))
+        self.lm_classification_model.to(self.device)
 
         self.mm_segmenter = models.BasicUNet(64, 9)
         self.mm_segmenter.load_state_dict(torch.load(self.settings['mm_segmentation_model_path']))
+        self.mm_segmenter.to(self.device)
 
-        self.mm_feature_extraction_model = models.Hole_Classifier_Multitask(6, 256)
+        self.mm_feature_extraction_model = models.Hole_Classifier_Multitask(7, 256)
         self.mm_feature_extraction_model.load_state_dict(torch.load(self.settings['mm_feature_extraction_model_path']))
+        self.mm_feature_extraction_model.to(self.device)
 
         self.mm_prior_model = models.BasicFixedDimModel(5, 300, 300)
         self.mm_prior_model.load_state_dict(torch.load(self.settings['mm_prior_model_path']))
+        self.mm_prior_model.to(self.device)
 
 
     def update_noice_hole_intensity(self, intensity):
@@ -62,6 +66,9 @@ class Ptolemy:
 
     def load_config_and_models(self, config_path):
         self.settings = json.load(open(config_path, 'r'))
+        self.device = self.settings['device']
+        if self.device == 'cuda':
+            os.environ['CUDA_VISIBLE_DEVICES'] = self.settings['CUDA_VISIBLE_DEVICES']
         self.load_models()
 
 

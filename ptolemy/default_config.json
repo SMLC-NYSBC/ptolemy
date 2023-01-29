@@ -1,4 +1,6 @@
 {
+    "device": "cpu",
+    "CUDA_VISIBLE_DEVICES": "",
     "lm_segment_search_size": 6,
     "lm_remove_area_lt": 100,
     "lm_crop_width": 240,
@@ -20,5 +22,5 @@
     "lm_prior_classication_model_path": "model_checkpoints/211215_lowmag_64x5_defaultadam_tightw_e2.torchmodel",
     "mm_segmentation_model_path": "model_checkpoints/211026_unet_9x64_ep6.torchmodel",
     "mm_prior_model_path": "model_checkpoints/221102_contaminant_model_5x300_3500adam_wdecay0.001_heavyaugmentation.torchmodel",
-    "mm_feature_extraction_model_path": "model_checkpoints/220811_b64_defadam_nosched_20dec02f_20nov23a_6x256.torchmodel"
+    "mm_feature_extraction_model_path": "model_checkpoints/220819_b64_defadam_nosched_20nov17d_21feb25a_7x256.torchmodel"
 }
