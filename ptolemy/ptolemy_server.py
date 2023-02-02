@@ -279,8 +279,8 @@ def push_lm(data: lm_image):
 
     raw_crops, centers, vertices, areas, mean_intensities, features, prior_scores = base_model.process_lm_image(image)
 
-    for center, feature, prior_score in zip(centers, features, prior_scores):
-        al_model.add_square_to_state(data.grid_id, data.tile_id, center, feature, prior_score, vertices)
+    for center, feature, prior_score, vertex_set, brightness, area in zip(centers, features, prior_scores, vertices, mean_intensities, areas):
+        al_model.add_square_to_state(data.grid_id, data.tile_id, center, feature, prior_score, vertex_set, brightness, area)
 
 
 @app.post('/push_mm')

@@ -79,7 +79,7 @@ class Ptolemy_AL:
             self.append_historical_state(path)
 
         if current_state_path is None:
-            self.current_lm_state = pd.DataFrame(columns= ['square_id', 'tile_id', 'grid_id', 'center_x', 'center_y', 'features', 'prior_score', 'visited', 'vert_1_x', 'vert_1_y', 'vert_2_x', 'vert_2_y', 'vert_3_x', 'vert_3_y', 'vert_4_x', 'vert_4_y'])
+            self.current_lm_state = pd.DataFrame(columns= ['square_id', 'tile_id', 'grid_id', 'center_x', 'center_y', 'features', 'prior_score', 'visited', 'vert_1_x', 'vert_1_y', 'vert_2_x', 'vert_2_y', 'vert_3_x', 'vert_3_y', 'vert_4_x', 'vert_4_y', 'brightness', 'area'])
             self.current_lm_state = self.current_lm_state.set_index('square_id')
 
             self.current_mm_state = pd.DataFrame(columns= ['hole_id', 'mm_img_id', 'square_id', 'grid_id', 'center_x', 'center_y', 'features', 'radius', 'prior_score', 'visited', 'ctf', 'ice_thickness'])
@@ -255,7 +255,7 @@ class Ptolemy_AL:
         likelihood.eval().to(self.device)
 
         with torch.no_grad():
-            sample = likelihood(model(unvisited_square_features)).cpu()
+            sample = likelihood(model(unvisited_square_features))
             ucb_probs = upper_confidence_bound(sample)
             unvisited_squares['GP_probs'] = ucb_probs
 
@@ -323,7 +323,7 @@ class Ptolemy_AL:
             likelihood.eval()
 
             with torch.no_grad():
-                sample = likelihood(model(unvisited_hole_features)).cpu()
+                sample = likelihood(model(unvisited_hole_features))
                 holes_to_run['ctf_pred'] = sample.mean[:, 1]
                 holes_to_run['ice_pred'] = sample.mean[:, 0]
                 holes_to_run['ctf_var'] = sample.variance[:, 1]
@@ -345,13 +345,13 @@ class Ptolemy_AL:
         return hole_id
 
 
-    def add_square_to_state(self, grid_id, tile_id, center, features, prior_score, vertices, square_id=None, visited=False):
+    def add_square_to_state(self, grid_id, tile_id, center, features, prior_score, vertices, brightness, area, square_id=None, visited=False):
         if not square_id:
             square_id = len(self.current_lm_state)
 
         # check uniqueness of square id here
 
-        self.current_lm_state.loc[square_id] = {'grid_id': grid_id, 'tile_id': tile_id, 'center_x': center[0], 'center_y': center[1], 'vert_1_x': vertices[0][0], 'vert_1_y': vertices[0][1], 'vert_2_x': vertices[1][0], 'vert_2_y': vertices[1][1], 'vert_3_x': vertices[2][0], 'vert_3_y': vertices[2][1], 'vert_4_x': vertices[3][0], 'vert_4_y': vertices[3][1], 'features': features, 'prior_score': prior_score, 'visited': visited}
+        self.current_lm_state.loc[square_id] = {'grid_id': grid_id, 'tile_id': tile_id, 'center_x': center[0], 'center_y': center[1], 'vert_1_x': vertices[0][0], 'vert_1_y': vertices[0][1], 'vert_2_x': vertices[1][0], 'vert_2_y': vertices[1][1], 'vert_3_x': vertices[2][0], 'vert_3_y': vertices[2][1], 'vert_4_x': vertices[3][0], 'vert_4_y': vertices[3][1], 'brightness': brightness, 'area': area, 'features': features, 'prior_score': prior_score, 'visited': visited}
 
 
     def visit_square(self, square_id):
