@@ -14,7 +14,8 @@ def clean_vertex_columns(df):
             [row['vert_2_x'], row['vert_2_y']],
             [row['vert_3_x'], row['vert_3_y']],
             [row['vert_4_x'], row['vert_4_y']]
-        ]
+        ],
+        axis = 1
     )
 
     columns = list(df.columns)
