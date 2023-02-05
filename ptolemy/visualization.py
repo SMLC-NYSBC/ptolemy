@@ -50,7 +50,7 @@ def viz_lm_image(image, boxes=None, scores=None, operator_selections=None, cente
         plt.scatter(centers[:, 0], centers[:, 1])
 
 
-def viz_mm_image(image, centers=None, radii=None, scores=None, operator_selections=None):
+def viz_mm_image(image, centers=None, radii=None, scores=None, operator_selections=None, print_scores=False):
     # Assumes boxes is a list of pointsets, should probably set that if it's not, or rationalize this generally
     # also assumes operator_selections is a pointset
     if radii is not None:
@@ -68,7 +68,10 @@ def viz_mm_image(image, centers=None, radii=None, scores=None, operator_selectio
             center_x = operator_selections.x
             center_y = operator_selections.y
         
-        if scores is not None:
+        if scores is not None and print_scores:
+            for cx, cy, score in zip(center_x, center_y, scores):
+                plt.text(cx, cy, round(score, 2), bbox=dict(boxstyle='round', facecolor='white'))
+        elif scores is not None:
             ax.scatter(center_x, center_y, cmap='RdYlGn', c=scores)
         else:
             ax.scatter(center_x, center_y)
@@ -91,7 +94,7 @@ def viz_mm_image(image, centers=None, radii=None, scores=None, operator_selectio
             collection.set_color(cmap(scores))
             collection.set_facecolor('none')
             collection.set_linewidth(2)
-        
+
         else:
             collection.set_color('r')
             collection.set_facecolor('none')
