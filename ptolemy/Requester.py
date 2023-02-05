@@ -164,6 +164,7 @@ class Ptolemy_Requester():
     def get_current_lm_state(self):
         lm_state = self.get_request('current_lm_state')
         lm_state = self.read_csv(lm_state, 'square_id')
+        # return lm_state
         return clean_vertex_columns(lm_state)
 
     
