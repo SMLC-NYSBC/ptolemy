@@ -317,7 +317,6 @@ class Ptolemy:
         if init.sum() == 0:
             raise ValueError('No good hole crops to find hole radius found')
 
-
         init = gaussian_filter(init, 5)
         edges = canny(init)
         radii = np.arange(init.shape[0] // 5, init.shape[0] // 2, 1)
@@ -348,12 +347,14 @@ class Ptolemy:
 
     def _filter_cutoff_holes(self, image, crops, centers, radii, boxes):
         image_x, image_y = image.shape
+
         rcrops, rcenters, rradii, rboxes = [], [], [], []
         for crop, center, radius, box in zip(crops, centers, radii, boxes):
             if center[0] - radius < 0 or center[0] + radius > image_y:
                 continue
             elif center[1] - radius < 0 or center[1] + radius > image_x:
                 continue
+
             rcrops.append(crop)
             rcenters.append(center)
             rradii.append(radius)
@@ -364,10 +365,14 @@ class Ptolemy:
     
     def _refine_center_and_radii(self, crops, radii):
         centers_relative_to_crops, new_radii = [], []
+
         for crop, radius in zip(crops, radii):
             init = gaussian_filter(crop, 5)
             edges = canny(init)
-            search_radii = np.arange(radius - self.settings['mm_refinement_radius_search_width'], radius + self.settings['mm_refinement_radius_search_width'], self.settings['mm_refinement_radius_search_granularity'])
+            search_radii = np.arange(radius - self.settings['mm_refinement_radius_search_width'],
+                                     radius + self.settings['mm_refinement_radius_search_width'],
+                                     self.settings['mm_refinement_radius_search_granularity'])
+            
             hough_res = hough_circle(edges, search_radii)
             _, cx, cy, radii = hough_circle_peaks(hough_res, search_radii, total_num_peaks=1)
             if len(cx) == 0:
@@ -379,26 +384,32 @@ class Ptolemy:
                 cx = cx[0]
                 cy = cy[0]
                 radius = radii[0]
+
             centers_relative_to_crops.append([cx, cy])
             new_radii.append(radius)
+        
         return centers_relative_to_crops, new_radii
 
 
     def _apply_center_refinement(self, centers_relative_to_crops, angle, bounding_boxes):
+        centers_relative_to_crops = np.array(centers_relative_to_crops)
         theta = np.deg2rad(angle)
         rot = np.array([[cos(theta), -sin(theta)], [sin(theta), cos(theta)]])
-        centers_relative_to_crops = np.array(centers_relative_to_crops)
+        
         rotated_centers_relative_to_crops = np.dot(centers_relative_to_crops, rot)
-        centers = [(rel_center[0] + bbox[0][0], rel_center[1] + bbox[0][1]) for rel_center, bbox in zip(rotated_centers_relative_to_crops, bounding_boxes)]
+        centers = [(rel_center[0] + bbox[0][0], rel_center[1] + bbox[0][1]) for 
+                    rel_center, bbox in zip(rotated_centers_relative_to_crops, bounding_boxes)]
         return centers
 
 
     def _make_mask_crops(self, crops, centers_relative_to_crops, radii):
         masked_crops = []
+
         for crop, center, radius in zip(crops, centers_relative_to_crops, radii):
             rr, cc = disk(center, radius, shape=crop.shape)
             mask = np.zeros(crop.shape)
             mask[cc, rr] = 1
+            
             masked = crop * mask
             masked_crops.append(masked)
 
