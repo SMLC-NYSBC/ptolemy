@@ -140,11 +140,19 @@ def clear_historical_state():
 
 @app.post('/initialize_new_session')
 def initialize_new_session(data: init_new_session):
+    """
+    noice_hole_intensity null value is -1 (since there should never be a negative intensity). 
+    """
     al_model.initialize_new_session(data.new_state_path, data.historical_state_paths, data.save_state_path)
+    base_model.update_noice_hole_intensity(-1)
 
 @app.get('/initialize_new_session')
 def initialize_new_session():
+    """
+    noice_hole_intensity null value is -1 (since there should never be a negative intensity). 
+    """
     al_model.initialize_new_session()
+    base_model.update_noice_hole_intensity(-1)
 
 
 @app.post('/append_current_state')
@@ -200,7 +208,7 @@ def process_stateless_mm(data: image):
 
     # check shapes
 
-    crops, centers, boxes, radius, features, prior_scores = base_model.process_mm_image(image)
+    crops, centers, boxes, radii, features, prior_scores = base_model.process_mm_image(image)
 
     order = np.argsort(prior_scores)[::-1]
     js = []
@@ -209,7 +217,7 @@ def process_stateless_mm(data: image):
         d['vertices'] = boxes[i].tolist()
         d['center'] = centers[i]
         d['score'] = float(prior_scores[i])
-        d['radius'] = float(radius)
+        d['radius'] = float(radii[i])
         d['features'] = features[i].tolist()
 
         # probably have to verify types here
@@ -246,10 +254,10 @@ def push_and_evaluate_mm(data: mm_image):
 
     # check shapes here
 
-    crops, centers, boxes, radius, features, prior_scores = base_model.process_mm_image(image)
+    crops, centers, boxes, radii, features, prior_scores = base_model.process_mm_image(image)
 
     holes_to_run = []
-    for center, feature, prior_score in zip(centers, features, prior_scores):
+    for center, feature, prior_score, radius in zip(centers, features, prior_score, radii):
         hole_id = al_model.add_hole_to_state(data.square_id, data.grid_id, data.mm_img_id, center, feature, prior_score, radius)
         holes_to_run.append(hole_id)
 
@@ -291,9 +299,9 @@ def push_mm(data: mm_image):
 
     # check shapes here
 
-    crops, centers, boxes, radius, features, prior_scores = base_model.process_mm_image(image)
+    crops, centers, boxes, radii, features, prior_scores = base_model.process_mm_image(image)
 
-    for center, feature, prior_score in zip(centers, features, prior_scores):
+    for center, feature, prior_score, radius in zip(centers, features, prior_scores, radii):
         al_model.add_hole_to_state(data.square_id, data.grid_id, data.mm_img_id, center, feature, prior_score, radius)
 
 

@@ -2,6 +2,7 @@ import os
 import json
 import sys
 import math
+from math import cos, sin
 
 path = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, path)
@@ -14,6 +15,7 @@ from scipy.ndimage import rotate, gaussian_filter
 from scipy.special import expit
 from skimage.feature import canny
 from skimage.transform import hough_circle, hough_circle_peaks, rescale
+from skimage.draw import disk
 
 from PoissonMixture import PoissonMixture
 from algorithms import flood_segments, grid_from_centroids, best_rot_angle
@@ -82,11 +84,11 @@ class Ptolemy:
 
 
     def process_mm_image(self, mm_image):
-        crops, centers, radius, boxes = self.get_mm_crops(mm_image)
-        batch = self.mm_crops_to_preprocessed_batch(crops, radius)
+        crops, masked_crops, centers, radii, boxes = self.get_mm_crops(mm_image)
+        batch = self.mm_crops_to_preprocessed_batch(crops, radii)
         features = self.get_mm_features(batch)
         prior_scores = self.get_mm_prior_scores(batch, features)
-        return crops, centers, boxes, radius, features, prior_scores
+        return crops, centers, boxes, radii, features, prior_scores
 
 
     ############# Low Mag Processing Functions ############
@@ -200,11 +202,23 @@ class Ptolemy:
         centers = PointSet2D.concatenate([PointSet2D([int(np.mean(box.y))], [int(np.mean(box.x))]) for box in boxes])
         centers = np.round(centers.as_matrix_y()).astype(int).tolist()
 
-        radius = self._mm_hole_radii(crops)
+        radii = self._mm_hole_radii(crops)
 
         boxes = [box.as_matrix_y() for box in boxes]
+        
+        if self.settings['mm_filter_cutoff_holes']:
+            # TODO add option to filter this more tolerantly
+            crops, centers, radii, boxes = self._filter_cutoff_holes(mm_image, crops, centers, radii, boxes)
+            
+        if len(crops) > self.settings['mm_refine_centers_if_more_holes_than']:
+            centers_relative_to_crops, radii = self._refine_center_and_radii(crops, radii)
+            centers = self._apply_center_refinement(centers_relative_to_crops, angle, boxes)
+        else:
+            centers_relative_to_crops = [[crop.shape[0] // 2, crop.shape[1] // 2] for crop in crops]
 
-        return crops, centers, radius, boxes
+        masked_crops = self._make_mask_crops(crops, centers_relative_to_crops, radii)
+        
+        return crops, masked_crops, centers, radii, boxes
 
 
     def _get_mm_mask(self, mm_image):
@@ -289,6 +303,11 @@ class Ptolemy:
 
 
     def _mm_hole_radii(self, crops):
+        """
+        This method should return a radii for each crop. 
+        Currently we find a consensus radius with this method but for futureproofing, 
+        it should return a list of length(crops)
+        """
         consensus_shape = self._mm_consensus_shape(crops)
         init = np.zeros(consensus_shape)
         for crop in crops:
@@ -307,7 +326,7 @@ class Ptolemy:
         if len(cx) == 0:
             raise ValueError('No circles detected in stacked crops')
 
-        return radii[0]
+        return [radii[0]] * len(crops)
 
     
     def _mm_extract_crops(self, boxes, rotated_boxes, rotated_image):
@@ -325,6 +344,65 @@ class Ptolemy:
             ret_rotated_boxes.append(rotated_box)
 
         return ret_crops, ret_boxes, ret_rotated_boxes
+
+
+    def _filter_cutoff_holes(self, image, crops, centers, radii, boxes):
+        image_x, image_y = image.shape
+        rcrops, rcenters, rradii, rboxes = [], [], [], []
+        for crop, center, radius, box in zip(crops, centers, radii, boxes):
+            if center[0] - radius < 0 or center[0] + radius > image_y:
+                continue
+            elif center[1] - radius < 0 or center[1] + radius > image_x:
+                continue
+            rcrops.append(crop)
+            rcenters.append(center)
+            rradii.append(radius)
+            rboxes.append(box)
+
+        return rcrops, rcenters, rradii, rboxes
+    
+    
+    def _refine_center_and_radii(self, crops, radii):
+        centers_relative_to_crops, new_radii = [], []
+        for crop, radius in zip(crops, radii):
+            init = gaussian_filter(crop, 5)
+            edges = canny(init)
+            search_radii = np.arange(radius - self.settings['mm_refinement_radius_search_width'], radius + self.settings['mm_refinement_radius_search_width'], self.settings['mm_refinement_radius_search_granularity'])
+            hough_res = hough_circle(edges, search_radii)
+            _, cx, cy, radii = hough_circle_peaks(hough_res, search_radii, total_num_peaks=1)
+            if len(cx) == 0:
+                print('no new circle found, returning original center and radius')
+                cx = crop.shape[0] // 2
+                cy = crop.shape[1] // 2
+                radius = radius
+            else:
+                cx = cx[0]
+                cy = cy[0]
+                radius = radii[0]
+            centers_relative_to_crops.append([cx, cy])
+            new_radii.append(radius)
+        return centers_relative_to_crops, new_radii
+
+
+    def _apply_center_refinement(self, centers_relative_to_crops, angle, bounding_boxes):
+        theta = np.deg2rad(angle)
+        rot = np.array([[cos(theta), -sin(theta)], [sin(theta), cos(theta)]])
+        centers_relative_to_crops = np.array(centers_relative_to_crops)
+        rotated_centers_relative_to_crops = np.dot(centers_relative_to_crops, rot)
+        centers = [(rel_center[0] + bbox[0][0], rel_center[1] + bbox[0][1]) for rel_center, bbox in zip(rotated_centers_relative_to_crops, bounding_boxes)]
+        return centers
+
+
+    def _make_mask_crops(self, crops, centers_relative_to_crops, radii):
+        masked_crops = []
+        for crop, center, radius in zip(crops, centers_relative_to_crops, radii):
+            rr, cc = disk(center, radius, shape=crop.shape)
+            mask = np.zeros(crop.shape)
+            mask[cc, rr] = 1
+            masked = crop * mask
+            masked_crops.append(masked)
+
+        return masked_crops
 
 
     def get_mm_features(self, batch):
@@ -356,9 +434,9 @@ class Ptolemy:
         return self.mm_prior_model.score_batch(batch)
 
     
-    def mm_crops_to_preprocessed_batch(self, crops, radius):
-        rescaled_crops = [self._mm_resize_to_radius(crop, radius, self.settings['target_hole_radius']) for crop in crops]
-        if 'noice_hole_intensity' not in self.settings.keys():
+    def mm_crops_to_preprocessed_batch(self, crops, radii):
+        rescaled_crops = [self._mm_resize_to_radius(crop, radius, self.settings['target_hole_radius']) for crop, radius in zip(crops, radii)]
+        if 'noice_hole_intensity' not in self.settings.keys() or self.settings['noice_hole_intensity'] == -1:
             print('Warning: no-ice hole pixel intensity not set. Defaulting to 1.2 * (90th percentile pixel intensity) as the normalization factor')
             all_pixels_flat = []
             for crop in crops:
