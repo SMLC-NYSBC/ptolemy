@@ -120,7 +120,7 @@ class Ptolemy_AL:
 
 
     def save_state(self, path):
-        if not os.isdir(path):
+        if not os.path.isdir(path):
             os.mkdir(path)
 
         prep_state_for_csv(self.current_lm_state).to_csv(path + '/lmstate.csv')

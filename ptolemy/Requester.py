@@ -79,13 +79,13 @@ class Ptolemy_Requester():
         ice_thickness: float or list of floats
         """
 
-        if hole_id is list:
+        if type(hole_id) is list:
             payload = {
                 'hole_ids': hole_id,
                 'ctfs': ctf,
                 'ice_thicknesses': ice_thickness
             }
-        elif hole_id is int:
+        elif type(hole_id) is int:
             payload = {
                 'hole_ids': [hole_id],
                 'ctfs': [ctf],
