@@ -257,7 +257,7 @@ def push_and_evaluate_mm(data: mm_image):
     crops, centers, boxes, radii, features, prior_scores = base_model.process_mm_image(image)
 
     holes_to_run = []
-    for center, feature, prior_score, radius in zip(centers, features, prior_score, radii):
+    for center, feature, prior_score, radius in zip(centers, features, prior_scores, radii):
         hole_id = al_model.add_hole_to_state(data.square_id, data.grid_id, data.mm_img_id, center, feature, prior_score, radius)
         holes_to_run.append(hole_id)
 
