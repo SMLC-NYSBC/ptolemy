@@ -173,9 +173,9 @@ class Ptolemy:
                 np.max(crop),
                 np.min(crop),
                 np.var(crop),
-                np.float(crop.shape[0] * crop.shape[1]),
-                np.float(kurtosis(crop, axis=None)),
-                np.float(skew(crop, axis=None))
+                float(crop.shape[0] * crop.shape[1]),
+                float(kurtosis(crop, axis=None)),
+                float(skew(crop, axis=None))
             ]))
         
         return feats
