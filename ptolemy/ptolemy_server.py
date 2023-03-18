@@ -227,6 +227,33 @@ def process_stateless_mm(data: image):
     return js
 
 
+@app.post('/process_stateless_mm_with_crops')
+def process_stateless_mm_with_crops(data: image):
+    """
+    Same as process_stateless_mm except it also returns the crops
+    """
+    image = np.array(data.image)
+    
+    crops, centers, boxes, radii, features, prior_scores = base_model.process_mm_image(image)
+
+    order = np.argsort(prior_scores)[::-1]
+    js = []
+    for i in order:
+        d = {}
+        d['vertices'] = boxes[i].tolist()
+        d['center'] = centers[i]
+        d['score'] = float(prior_scores[i])
+        d['radius'] = float(radii[i])
+        d['features'] = features[i].tolist()
+        d['crops'] = crops[i].tolist()
+
+        # probably have to verify types here
+
+        js.append(d)
+    
+    return js
+
+
 @app.post('/select_next_square') # need a better name for this
 def select_next_square(data: single_int):
     """
