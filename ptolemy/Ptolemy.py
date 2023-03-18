@@ -173,9 +173,9 @@ class Ptolemy:
                 np.max(crop),
                 np.min(crop),
                 np.var(crop),
-                float(crop.shape[0] * crop.shape[1]),
-                float(kurtosis(crop, axis=None)),
-                float(skew(crop, axis=None))
+                np.float32(crop.shape[0] * crop.shape[1]),
+                np.float32(kurtosis(crop, axis=None)),
+                np.float32(skew(crop, axis=None))
             ]))
         
         return feats
@@ -464,7 +464,7 @@ class Ptolemy:
 
 
     def _crops_to_fixed_size_batch(self, crops, size):
-        batch = np.zeros((len(crops), 1, size, size), dtype='float')
+        batch = np.zeros((len(crops), 1, size, size), dtype='float32')
         for i, crop in enumerate(crops):
             if crop.shape[0] > size or crop.shape[1] > size:
                 center = np.array([crop.shape[0] // 2, crop.shape[1] // 2])
