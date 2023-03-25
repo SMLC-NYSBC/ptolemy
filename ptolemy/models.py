@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision
 import numpy as np
 
 class LowMag_64x5_2ep(nn.Module):
@@ -198,3 +199,65 @@ class BasicFixedDimModel(nn.Module):
             batch = torch.tensor(batch).float().to(next(self.final.parameters()).device)
             return torch.sigmoid(self.forward(batch)).flatten().detach().cpu().numpy()
 
+
+        
+
+class CNNModel(nn.Module):
+    def __init__(self):
+        super(CNNModel, self).__init__()
+        
+        blur = torchvision.transforms.GaussianBlur(5, 1.5)
+        resize = torchvision.transforms.Resize(100)
+        self.composed = torchvision.transforms.Compose([blur, resize])
+        
+        # Convolutional layers
+        self.conv1 = nn.Conv2d(1, 16, kernel_size=3, padding=1)
+        self.maxpool1 = nn.MaxPool2d(kernel_size=2)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
+        self.maxpool2 = nn.MaxPool2d(kernel_size=2)
+        self.conv3 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
+        self.maxpool3 = nn.MaxPool2d(kernel_size=2)
+        self.conv4 = nn.Conv2d(32, 16, kernel_size=3, padding=1)
+        self.maxpool4 = nn.MaxPool2d(kernel_size=2)
+        self.conv5 = nn.Conv2d(16, 4, kernel_size=3, padding=1)
+        self.maxpool5 = nn.MaxPool2d(kernel_size=2)
+        
+        # Fully-connected layers
+        self.fc1 = nn.Linear(36, 1)
+        # self.fc2 = nn.Linear(128, 1)
+        
+
+    def forward(self, x):
+        # Convolutional layers
+        x = self.conv1(x)
+        x = nn.functional.relu(x)
+        x = self.maxpool1(x)
+        x = self.conv2(x)
+        x = nn.functional.relu(x)
+        x = self.maxpool2(x)
+        x = self.conv3(x)
+        x = nn.functional.relu(x)
+        x = self.maxpool3(x)
+        x = self.conv4(x)
+        x = nn.functional.relu(x)
+        x = self.maxpool4(x)
+        x = self.conv5(x)
+        x = nn.functional.relu(x)
+        x = self.maxpool5(x)
+        
+        # Flatten output for fully-connected layers
+        x = x.view(x.size(0), -1)
+        
+        # Fully-connected layer
+        x = self.fc1(x)
+        # x = nn.functional.relu(x)
+        # x = self.fc2(x)
+        
+        return x
+    
+    def score_batch(self, batch):
+        batch = torch.tensor(batch).float()
+        batch = self.composed(batch)
+        with torch.no_grad():
+            batch = batch.to(next(self.fc1.parameters()).device)
+            return torch.sigmoid(self.forward(batch)).flatten().detach().cpu().numpy()

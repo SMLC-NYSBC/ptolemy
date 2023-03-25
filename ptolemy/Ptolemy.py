@@ -10,6 +10,7 @@ sys.path.insert(0, path)
 import numpy as np
 import pandas as pd
 import torch
+import torchvision
 from scipy.stats import skew, kurtosis
 from scipy.ndimage import rotate, gaussian_filter
 from scipy.special import expit
@@ -40,7 +41,7 @@ class Ptolemy:
 
     def __init__(self, config='default'):
         if config == 'default':
-            config_path = os.path.dirname(os.path.realpath(__file__)) + '/default_config.json'
+            config_path = os.path.dirname(os.path.realpath(__file__)) + '/config_gpu_new_hole_classifier.json'
         else:
             config_path = config
         self.load_config_and_models(config_path)
@@ -59,7 +60,7 @@ class Ptolemy:
         self.mm_feature_extraction_model.load_state_dict(torch.load(self.settings['mm_feature_extraction_model_path']))
         self.mm_feature_extraction_model.to(self.device)
 
-        self.mm_prior_model = models.BasicFixedDimModel(5, 300, 300)
+        self.mm_prior_model = models.CNNModel()
         self.mm_prior_model.load_state_dict(torch.load(self.settings['mm_prior_model_path']))
         self.mm_prior_model.to(self.device)
 
@@ -85,7 +86,7 @@ class Ptolemy:
 
     def process_mm_image(self, mm_image):
         crops, masked_crops, centers, radii, boxes = self.get_mm_crops(mm_image)
-        batch = self.mm_crops_to_preprocessed_batch(crops, radii)
+        batch = self.mm_crops_to_preprocessed_batch(masked_crops, radii)
         features = self.get_mm_features(batch)
         prior_scores = self.get_mm_prior_scores(batch, features)
         return crops, centers, boxes, radii, features, prior_scores
