@@ -106,9 +106,9 @@ class Ptolemy_AL:
         mm_state = pd.read_csv(path + '/mmstate.csv', index_col='hole_id')
 
         lm_feats = np.load(path + '/lm_feats.npy')
-        lm_state['features'] = lm_feats
+        lm_state['features'] = list(lm_feats)
         mm_feats = np.load(path + '/mm_feats.npy')
-        mm_state['features'] = mm_feats
+        mm_state['features'] = list(mm_feats)
 
         return lm_state, mm_state
 
@@ -155,7 +155,7 @@ class Ptolemy_AL:
         if save_state_path: self.save_state(save_state_path)
 
         self.clear_current_state()
-        if new_state_path: self.load_state(new_state_path)
+        if new_state_path: self.current_lm_state, self.current_mm_state = self.load_state(new_state_path)
         
         self.clear_historical_state()
         if len(historical_state_paths) > 0: [self.append_historical_state(path) for path in historical_state_paths]
@@ -189,7 +189,8 @@ class Ptolemy_AL:
 
 
     def _set_lm_parameters(self, model):
-        model.mean_module.constant = torch.nn.Parameter(torch.tensor([float(self.settings['lm_gp_mean_constant'])])) # default should be 20 for now
+        # model.mean_module.constant = torch.nn.Parameter(torch.tensor([float(self.settings['lm_gp_mean_constant'])])) # default should be 20 for now
+        model.mean_module.constant = float(self.settings['lm_gp_mean_constant'])
         all_square_features = torch.tensor(np.stack(self.current_lm_state['features'].values).astype('float'))
         model.covar_module.base_kernel.raw_lengthscale = torch.nn.Parameter(torch.quantile(all_square_features, q=0.25, dim=0).unsqueeze(0).float())
         model.likelihood.noise_covar.raw_noise = torch.nn.Parameter(torch.tensor([float(self.settings['lm_gp_noise_constant'])])) # default should be 15
@@ -217,12 +218,23 @@ class Ptolemy_AL:
         # Fit GP with set hyperparameters
         # Predict unvisited squares, compute UCB probabilities
         # return dataframe of unvisited squares with gp probabilities
+        assert len(self.current_lm_state) > 0, "must have pushed lm images"
+        
+        if len(self.current_mm_state) == 0:
+            unvisited_squares = self.current_lm_state[~self.current_lm_state['visited']]
+            if grid_id != -1:
+                unvisited_squares = unvisited_squares[unvisited_squares['grid_id'] == grid_id]
+            
+            unvisited_squares['GP_probs'] = 1 / len(unvisited_squares)
+            return unvisited_squares
+            
+        
 
         train_x, train_y = [], []
 
         visited_holes = self.current_mm_state[self.current_mm_state['visited']].dropna(subset=['features', 'ctf', 'ice_thickness'])
         visited_squares = self.current_lm_state[self.current_lm_state['visited']].dropna(subset=['features'])
-
+                
         for square_id, row in visited_squares.iterrows():
             train_x.append(row.features)
             holes = visited_holes[visited_holes.square_id == square_id]

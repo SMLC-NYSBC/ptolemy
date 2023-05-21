@@ -46,15 +46,15 @@ class Ptolemy_Requester():
     def push_lm(self, image, grid_id : int, tile_id : int = None):
         payload = {
             'image': image.tolist(),
-            'grid_id': grid_id,
-            'tile_id': tile_id
+            'grid_id': int(grid_id),
+            'tile_id': int(tile_id)
         }
         self.post_request('push_lm', payload)
 
     
     def select_next_square(self, grid_id: int):
         payload = {
-            'value': grid_id
+            'value': int(grid_id)
         }
         response = self.post_request('select_next_square', payload)
         df = self.read_csv(response, 'square_id')
@@ -64,9 +64,9 @@ class Ptolemy_Requester():
     def push_and_evaluate_mm(self, image, grid_id: int, square_id: int, mm_img_id: int = None):
         payload = {
             'image': image.tolist(),
-            'grid_id': grid_id,
-            'square_id': square_id,
-            'mm_img_id': mm_img_id
+            'grid_id': int(grid_id),
+            'square_id': int(square_id),
+            'mm_img_id': int(mm_img_id)
         }
         response = self.post_request('push_and_evaluate_mm', payload)
         return self.read_csv(response, 'hole_id')
@@ -81,15 +81,15 @@ class Ptolemy_Requester():
 
         if type(hole_id) is list:
             payload = {
-                'hole_ids': hole_id,
-                'ctfs': ctf,
-                'ice_thicknesses': ice_thickness
+                'hole_ids': [int(x) for x in hole_id],
+                'ctfs': [float(x) for x in ctf],
+                'ice_thicknesses': [float(x) for x in ice_thickness]
             }
         elif type(hole_id) is int:
             payload = {
-                'hole_ids': [hole_id],
-                'ctfs': [ctf],
-                'ice_thicknesses': [ice_thickness]
+                'hole_ids': [int(hole_id)],
+                'ctfs': [float(ctf)],
+                'ice_thicknesses': [float(ice_thickness)]
             }
 
         self.post_request('visit_holes', payload)
