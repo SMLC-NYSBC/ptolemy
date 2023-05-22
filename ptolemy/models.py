@@ -150,8 +150,10 @@ class Hole_Classifier_Multitask(nn.Module):
         return self.final1(x), self.final2(x), self.final3(x)
     
     def get_activations(self, x):
-        for conv, bn in zip(self.convs, self.bns):
+        for conv, bn in zip(self.convs[:-1], self.bns[:-1]):
             x = self.pooling(self.activation(bn(conv(x))))
+            
+        x = self.pooling(self.bns[:-1](self.convs[:-1](x)))
             
         return x
 
