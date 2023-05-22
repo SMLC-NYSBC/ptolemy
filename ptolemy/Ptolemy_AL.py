@@ -250,7 +250,9 @@ class Ptolemy_AL:
                 train_y.append(counts)
 
         train_x = torch.tensor(np.stack(train_x)).float().to(self.device)
-        train_x = (train_x - train_x.mean()) / train_x.var()
+        train_x_mean = train_x.mean()
+        train_x_var = train_x.var()
+        train_x_norm = (train_x - train_x_mean) / train_x_var
         train_y = torch.tensor(train_y).float().to(self.device)
 
         likelihood = gpytorch.likelihoods.GaussianLikelihood().float()
@@ -263,6 +265,7 @@ class Ptolemy_AL:
             unvisited_squares = unvisited_squares[unvisited_squares['grid_id'] == grid_id]
 
         unvisited_square_features = torch.tensor(np.stack(unvisited_squares['features'].values)).float().to(self.device)
+        unvisited_square_features = (unvisited_square_features - train_x_mean) / train_x_var
 
         model.eval().to(self.device)
         likelihood.eval().to(self.device)
