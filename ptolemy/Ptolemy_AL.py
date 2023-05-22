@@ -250,6 +250,7 @@ class Ptolemy_AL:
                 train_y.append(counts)
 
         train_x = torch.tensor(np.stack(train_x)).float().to(self.device)
+        train_x = (train_x - np.mean(train_x) / np.var(train_x)
         train_y = torch.tensor(train_y).float().to(self.device)
 
         likelihood = gpytorch.likelihoods.GaussianLikelihood().float()
