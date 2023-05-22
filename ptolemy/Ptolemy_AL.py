@@ -248,25 +248,26 @@ class Ptolemy_AL:
                 holes = visited_holes[visited_holes.square_id == square_id]
                 counts = (holes.ctf < 5).sum()
                 train_y.append(counts)
-
+                
+        unvisited_squares = self.current_lm_state[~self.current_lm_state['visited']]
+        if grid_id != -1:
+            unvisited_squares = unvisited_squares[unvisited_squares['grid_id'] == grid_id]
+        
+        unvisited_square_features = torch.tensor(np.stack(unvisited_squares['features'].values)).float().to(self.device)
         train_x = torch.tensor(np.stack(train_x)).float().to(self.device)
-        train_x_mean = train_x.mean()
-        train_x_var = train_x.var()
-        train_x_norm = (train_x - train_x_mean) / train_x_var
+        
+        combined = torch.cat((train_x, unvisited_square_features))
+        combined_mean = combined.mean()
+        combined_var = combined.var()
+        
+        unvisited_square_features = (unvisited_square_features - combined_mean) / combined_var
+        train_x = (train_x - combined_mean) / combined_var
         train_y = torch.tensor(train_y).float().to(self.device)
 
         likelihood = gpytorch.likelihoods.GaussianLikelihood().float()
         model = SingleTaskGP(train_x, train_y, likelihood).float()
 
         model = self._set_lm_parameters(model)
-
-        unvisited_squares = self.current_lm_state[~self.current_lm_state['visited']]
-        if grid_id != -1:
-            unvisited_squares = unvisited_squares[unvisited_squares['grid_id'] == grid_id]
-
-        unvisited_square_features = torch.tensor(np.stack(unvisited_squares['features'].values)).float().to(self.device)
-        unvisited_square_features = (unvisited_square_features - train_x_mean) / train_x_var
-
         model.eval().to(self.device)
         likelihood.eval().to(self.device)
 
