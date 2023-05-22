@@ -153,7 +153,7 @@ class Hole_Classifier_Multitask(nn.Module):
         for conv, bn in zip(self.convs[:-1], self.bns[:-1]):
             x = self.pooling(self.activation(bn(conv(x))))
             
-        x = self.pooling(self.bns[:-1](self.convs[:-1](x)))
+        x = self.pooling(self.bns[-1](self.convs[-1](x)))
             
         return x
 
