@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import torch
 import gpytorch
+import time
 
 from ptolemy.utils import prep_state_for_csv
 
@@ -95,6 +96,8 @@ class Ptolemy_AL:
         self.load_config(config_path)
         self.current_active_holes = set()
         self.device = self.settings['device']
+        
+        self.modeling_cap = None
 
     
     def load_config(self, config_path):
@@ -304,8 +307,14 @@ class Ptolemy_AL:
                     train_x = torch.cat(historical_train_x)
                     train_y = torch.cat(historical_train_y)
 
+            if self.modeling_cap is not None:
+                train_x = train_x[max(0, len(train_x) - self.modeling_cap):]
+                train_y = train_y[max(0, len(train_y) - self.modeling_cap):]
+
             train_x = train_x.to(self.device)
             train_y = train_y.to(self.device)
+           
+            mm_modeling_time_start = time.time()
             
             likelihood = gpytorch.likelihoods.MultitaskGaussianLikelihood(num_tasks=2).float()
             model = MultitaskGP(train_x, train_y, likelihood, n_tasks=2).float()
@@ -345,6 +354,14 @@ class Ptolemy_AL:
                 holes_to_run['ice_pred'] = sample.mean[:, 0]
                 holes_to_run['ctf_var'] = sample.variance[:, 1]
                 holes_to_run['ice_var'] = sample.variance[:, 0]
+
+            mm_modeling_time_end = time.time()
+            if mm_modeling_time_end - mm_modeling_time_start > self.settings['mm_modeling_time_soft_cap_seconds']:
+                if self.modeling_cap is not None:
+                    self.modeling_cap -= 5
+                else:
+                    self.modeling_cap = len(train_x)
+                    print('hit modeling cap at {} seconds with {} train datapoints'.format(round(mm_modeling_time_end - mm_modeling_time_start), self.modeling_cap))
 
         else:
             holes_to_run['ctf_pred'] = 2.0
