@@ -43,7 +43,7 @@ sim = Microscope_Simulator()
 
 # Send a request to the server
 requester = Ptolemy_Requester(f'http://127.0.0.1:{args.port}/')
-requester.set_config("/h2/pkim/ptolemy/ptolemy/config_gpu_new_hole_classifier.json")
+requester.set_config("/h2/pkim/ptolemy/ptolemy/default_config_gpu.json")
 requester.initialize_new_session('m23feb16a/first_square_visited.state')
 requester.set_noice_hole_intensity(13.882552)
 
@@ -74,6 +74,7 @@ while progress < 460:
         
     print('visiting square {}/{}, time {}'.format(progress, 426, round(time.time()-start)))
     
+    this_square_ctfs = []
     for sq_img_id, sq_img in square_images.items():
         res = requester.push_and_evaluate_mm(sq_img, 1, squareid, sq_img_id)
         hole_ids, ctfs, ices = [], [], []
@@ -87,12 +88,13 @@ while progress < 460:
                 ices.append(ice_ctf['ice'])
         requester.visit_holes(hole_ids, ctfs, ices)
         hole_ctfs.extend(ctfs)
-        square_hole_ctfs.append(ctfs)
+        this_square_ctfs.extend(ctfs)
         print('visited {} holes'.format(len(hole_ids)))
     
+    square_hole_ctfs.append(this_square_ctfs)
     progress += 1
         
-pickle.dump([hole_ctfs, square_hole_ctfs], open('m23feb16a_results/squaregp_holeprior_gt_75.pkl', 'wb'))
+pickle.dump([hole_ctfs, square_hole_ctfs], open('m23feb16a_results/230606_cutoff3.5_squaregp_holeprior_gt_75.pkl', 'wb'))
 
 # Stop the server
 # This is done by setting the running state of the loop in the server to False
