@@ -89,7 +89,7 @@ class Ptolemy_AL:
             self.current_lm_state, self.current_mm_state = self.load_state(current_state_path)
 
         if config == 'default':
-            config_path = os.path.dirname(os.path.realpath(__file__)) + '/default_config.json'
+            config_path = os.path.dirname(os.path.realpath(__file__)) + '/default_config_cpu.json'
         else:
             config_path = config
         
