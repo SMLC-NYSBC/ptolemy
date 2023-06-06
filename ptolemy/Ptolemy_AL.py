@@ -241,7 +241,7 @@ class Ptolemy_AL:
         for square_id, row in visited_squares.iterrows():
             train_x.append(row.features)
             holes = visited_holes[visited_holes.square_id == square_id]
-            counts = (holes.ctf < 5).sum()
+            counts = (holes.ctf < self.settings["lm_ctf_good_hole_cutoff"]).sum()
             train_y.append(counts)
 
         for lm_state, mm_state in zip(self.historical_lm_state, self.historical_mm_state):
@@ -249,7 +249,7 @@ class Ptolemy_AL:
                 train_x.append(row.features)
                 visited_holes = mm_state[mm_state['visited']].dropna(subset=['features', 'ctf', 'ice_thickness'])
                 holes = visited_holes[visited_holes.square_id == square_id]
-                counts = (holes.ctf < 5).sum()
+                counts = (holes.ctf < self.settings["lm_ctf_good_hole_cutoff"]).sum()
                 train_y.append(counts)
                 
         unvisited_squares = self.current_lm_state[~self.current_lm_state['visited']]
