@@ -41,7 +41,7 @@ class Ptolemy:
 
     def __init__(self, config='default'):
         if config == 'default':
-            config_path = os.path.dirname(os.path.realpath(__file__)) + '/config_cpu_new_hole_classifier.json'
+            config_path = os.path.dirname(os.path.realpath(__file__)) + '/default_config_cpu.json'
         else:
             config_path = config
         self.load_config_and_models(config_path)
