@@ -53,6 +53,14 @@ def upper_confidence_bound(dist, n_samples=10000):
         probs[sample] += 1
     return probs / n_samples
 
+def upper_confidence_bound_v2(dist, n_samples=10000):
+    sample = dist.sample_n(n_samples)
+    sample_mean = sample.mean(axis=0)
+    sample_std = sample.std(axis=0)
+    upperbound = sample_mean + (2 * sample_std)
+    probs = upperbound / max(upperbound)
+    return probs
+
 
 class Ptolemy_AL:
     """
@@ -276,7 +284,7 @@ class Ptolemy_AL:
 
         with torch.no_grad():
             sample = likelihood(model(unvisited_square_features))
-            ucb_probs = upper_confidence_bound(sample)
+            ucb_probs = upper_confidence_bound_v2(sample)
             unvisited_squares['GP_probs'] = ucb_probs
 
         return unvisited_squares
