@@ -63,7 +63,7 @@ progress = 1
 while progress < 460:
     df = requester.select_next_square(1)
     df['posterior'] = df.prior_score # * df.GP_probs
-    df.sort_values(by='posterior', ascending=False)
+    df = df.sort_values(by='posterior', ascending=False)
     for squareid, row in df.iterrows():
         square_images = sim.get_square_images(coordinates=row.vertices, grid_id=row.grid_id, tile_id=row.tile_id)
         if 'failed' not in square_images.keys():
