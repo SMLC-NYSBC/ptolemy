@@ -171,6 +171,10 @@ class Ptolemy_Requester():
     def get_current_mm_state(self):
         mm_state = self.get_request('current_mm_state')
         return self.read_csv(mm_state, 'hole_id')
+    
+    def get_current_lm_features(self):
+        response = self.get_request('current_lm_features').json()
+        return np.array(response['features'])
 
     
     

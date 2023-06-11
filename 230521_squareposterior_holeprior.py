@@ -43,7 +43,7 @@ sim = Microscope_Simulator()
 
 # Send a request to the server
 requester = Ptolemy_Requester(f'http://127.0.0.1:{args.port}/')
-requester.set_config("/h2/pkim/ptolemy/ptolemy/default_config_gpu.json")
+requester.set_config("/h2/pkim/ptolemy/ptolemy/test_lm_config_gpu.json")
 requester.initialize_new_session('m23feb16a/first_square_visited.state')
 requester.set_noice_hole_intensity(13.882552)
 
@@ -93,7 +93,7 @@ while progress < 460:
     square_hole_ctfs.append(this_square_ctfs)
     progress += 1
         
-pickle.dump([hole_ctfs, square_hole_ctfs], open('m23feb16a_results/230606_cutoff3.5_squareposterior_holeprior_gt_75.pkl', 'wb'))
+pickle.dump([hole_ctfs, square_hole_ctfs], open('m23feb16a_results/230610_testhparam_cutoff3.5_squareposterior_holeprior_gt_75.pkl', 'wb'))
 
 # Stop the server
 # This is done by setting the running state of the loop in the server to False

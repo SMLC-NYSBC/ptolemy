@@ -172,11 +172,11 @@ class Ptolemy:
             feats.append(np.array([
                 np.mean(crop),
                 np.max(crop),
-                np.min(crop),
+                # np.min(crop),
                 np.var(crop),
                 np.float32(crop.shape[0] * crop.shape[1]),
-                np.float32(kurtosis(crop, axis=None)),
-                np.float32(skew(crop, axis=None))
+                # np.float32(kurtosis(crop, axis=None)),
+                # np.float32(skew(crop, axis=None))
             ]))
         
         return feats
