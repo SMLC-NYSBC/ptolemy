@@ -1,6 +1,6 @@
 {
     "device": "cuda",
-    "CUDA_VISIBLE_DEVICES": "3",
+    "CUDA_VISIBLE_DEVICES": "7",
     "lm_segment_search_size": 6,
     "lm_remove_area_lt": 100,
     "lm_crop_width": 240,
