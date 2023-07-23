@@ -76,7 +76,7 @@ def viz_mm_image(image, centers=None, radii=None, scores=None, operator_selectio
         else:
             ax.scatter(center_x, center_y)
     
-    if radii:
+    if radii is not None:
         patches = []
         if type(radii) == list:
             for x, y, radius in zip(center_x, center_y, radii):

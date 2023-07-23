@@ -176,7 +176,9 @@ class Ptolemy_Requester():
         response = self.get_request('current_lm_features').json()
         return np.array(response['features'])
 
-    
+    def get_current_mm_features(self):
+        response = self.get_request('current_mm_features').json()
+        return np.array(response['features'])
     
     
 

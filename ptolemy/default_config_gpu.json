@@ -5,7 +5,7 @@
     "lm_remove_area_lt": 100,
     "lm_crop_width": 240,
     "lm_square_min_width": 0,
-    "lm_ctf_good_hole_cutoff": 3.5,
+    "lm_ctf_good_hole_cutoff": 5,
     "mm_mask_threshold": 0.0001,
     "mm_dim_mult_of": 512,
     "mm_segment_search_size": 6,
