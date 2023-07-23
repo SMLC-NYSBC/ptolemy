@@ -64,7 +64,7 @@ while sum(requester.get_current_lm_state().visited) < 462:
     df = requester.select_next_square(1)
     # df['posterior'] = df.prior_score * df.GP_probs
     df['posterior'] = df.GP_probs
-    df.sort_values(by='posterior', ascending=False)
+    df = df.sort_values(by='posterior', ascending=False)
     for squareid, row in df.iterrows():
         square_images = sim.get_square_images(coordinates=row.vertices, grid_id=row.grid_id, tile_id=row.tile_id)
         if 'failed' not in square_images.keys():
@@ -74,6 +74,7 @@ while sum(requester.get_current_lm_state().visited) < 462:
         
     print('visiting square {}/{}, time {}'.format(progress, 426, round(time.time()-start)))
     
+    this_square_ctfs = []
     for sq_img_id, sq_img in square_images.items():
         res = requester.push_and_evaluate_mm(sq_img, 1, squareid, sq_img_id)
         hole_ids, ctfs, ices = [], [], []
@@ -87,9 +88,10 @@ while sum(requester.get_current_lm_state().visited) < 462:
                 ices.append(ice_ctf['ice'])
         requester.visit_holes(hole_ids, ctfs, ices)
         hole_ctfs.extend(ctfs)
-        square_hole_ctfs.append(ctfs)
+        this_square_ctfs.extend(ctfs)
         print('visited {} holes'.format(len(hole_ids)))
     
+    square_hole_ctfs.append(this_square_ctfs)
     progress += 1
         
 pickle.dump([hole_ctfs, square_hole_ctfs], open('/h2/pkim/ptolemy/m23feb16a_results/230703_squaregp_nohole_correctnorm.pkl', 'wb'))
