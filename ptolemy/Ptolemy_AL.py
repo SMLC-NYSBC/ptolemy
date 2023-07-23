@@ -203,7 +203,7 @@ class Ptolemy_AL:
         # model.mean_module.constant = torch.nn.Parameter(torch.tensor([float(self.settings['lm_gp_mean_constant'])])) # default should be 20 for now
         model.mean_module.constant = float(self.settings['lm_gp_mean_constant'])
         all_square_features = torch.tensor(np.stack(self.current_lm_state[self.current_lm_state.prior_score > 0.2]['features'].values).astype('float'))
-        all_square_features = (all_square_features - all_square_features.mean(dim=0)) / all_square_features.var(dim=0)
+        # all_square_features = (all_square_features - all_square_features.mean(dim=0)) / all_square_features.var(dim=0)
         model.covar_module.base_kernel.raw_lengthscale = torch.nn.Parameter(torch.quantile(all_square_features, q=0.25, dim=0).unsqueeze(0).float())
         model.likelihood.noise_covar.raw_noise = torch.nn.Parameter(torch.tensor([float(self.settings['lm_gp_noise_constant'])])) # default should be 15
         model.covar_module.outputscale = float(self.settings['lm_gp_outputscale']) # default should be 500
@@ -268,12 +268,12 @@ class Ptolemy_AL:
         unvisited_square_features = torch.tensor(np.stack(unvisited_squares['features'].values)).float().to(self.device)
         train_x = torch.tensor(np.stack(train_x)).float().to(self.device)
         
-        combined = torch.cat((train_x, unvisited_square_features))
-        combined_mean = combined.mean(dim=0)
-        combined_var = combined.var(dim=0)
+        # combined = torch.cat((train_x, unvisited_square_features))
+        # combined_mean = combined.mean(dim=0)
+        # combined_var = combined.var(dim=0)
         
-        unvisited_square_features = (unvisited_square_features - combined_mean) / combined_var
-        train_x = (train_x - combined_mean) / combined_var
+        # unvisited_square_features = (unvisited_square_features - combined_mean) / combined_var
+        # train_x = (train_x - combined_mean) / combined_var
         train_y = torch.tensor(train_y).float().to(self.device)
 
         likelihood = gpytorch.likelihoods.GaussianLikelihood().float()

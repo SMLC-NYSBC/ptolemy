@@ -16,7 +16,7 @@ import matplotlib.path as mplPath
 from MicroscopeSimulator import Microscope_Simulator
 
 
-# This function will run the Uvicorn server
+# This function will run the uvicorn server
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--port', type=int, required=True)

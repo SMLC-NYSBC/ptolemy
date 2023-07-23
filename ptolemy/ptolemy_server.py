@@ -353,6 +353,10 @@ def current_mm_state():
 def current_lm_features():
     return {'features': np.stack(al_model.current_lm_state.features.values).tolist()}
 
+@app.get('/current_mm_features')
+def current_mm_features():
+    return {'features': np.stack(al_model.current_mm_state.features.values).tolist()}
+
 
 @app.post('/visit_square')
 def visit_square(data: visit_square_record):
