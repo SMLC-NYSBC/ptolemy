@@ -409,7 +409,11 @@ class Ptolemy:
         for crop, center, radius in zip(crops, centers_relative_to_crops, radii):
             rr, cc = disk(center, radius, shape=crop.shape)
             mask = np.zeros(crop.shape)
-            mask[cc, rr] = 1
+            safe_cc = cc[(cc > 0) & (cc < crop.shape[0])]
+            safe_rr = rr[(cc > 0) & (cc < crop.shape[0])]
+            safe_cc = safe_cc[(safe_rr > 0) & (safe_rr < crop.shape[1])]
+            safe_rr = safe_rr[(safe_rr > 0) & (safe_rr < crop.shape[1])]
+            mask[safe_cc, safe_rr] = 1
             
             masked = crop * mask
             masked_crops.append(masked)
