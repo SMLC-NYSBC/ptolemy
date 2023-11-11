@@ -233,7 +233,7 @@ class Ptolemy_AL:
         assert len(self.current_lm_state) > 0, "must have pushed lm images"
         
         if len(self.current_mm_state) == 0:
-            unvisited_squares = self.current_lm_state[~self.current_lm_state['visited']]
+            unvisited_squares = self.current_lm_state[~self.current_lm_state['visited'].astype(bool)]
             if grid_id != -1:
                 unvisited_squares = unvisited_squares[unvisited_squares['grid_id'] == grid_id]
             
@@ -244,8 +244,8 @@ class Ptolemy_AL:
 
         train_x, train_y = [], []
 
-        visited_holes = self.current_mm_state[self.current_mm_state['visited']].dropna(subset=['features', 'ctf', 'ice_thickness'])
-        visited_squares = self.current_lm_state[self.current_lm_state['visited']].dropna(subset=['features'])
+        visited_holes = self.current_mm_state[self.current_mm_state['visited'].astype(bool)].dropna(subset=['features', 'ctf', 'ice_thickness'])
+        visited_squares = self.current_lm_state[self.current_lm_state['visited'].astype(bool)].dropna(subset=['features'])
                 
         for square_id, row in visited_squares.iterrows():
             train_x.append(row.features)
@@ -254,14 +254,14 @@ class Ptolemy_AL:
             train_y.append(counts)
 
         for lm_state, mm_state in zip(self.historical_lm_state, self.historical_mm_state):
-            for square_id, row in lm_state[lm_state['visited']].dropna(subset=['features']):
+            for square_id, row in lm_state[lm_state['visited'].astype(bool)].dropna(subset=['features']):
                 train_x.append(row.features)
-                visited_holes = mm_state[mm_state['visited']].dropna(subset=['features', 'ctf', 'ice_thickness'])
+                visited_holes = mm_state[mm_state['visited'].astype(bool)].dropna(subset=['features', 'ctf', 'ice_thickness'])
                 holes = visited_holes[visited_holes.square_id == square_id]
                 counts = (holes.ctf < self.settings["lm_ctf_good_hole_cutoff"]).sum()
                 train_y.append(counts)
                 
-        unvisited_squares = self.current_lm_state[~self.current_lm_state['visited']]
+        unvisited_squares = self.current_lm_state[~self.current_lm_state['visited'].astype(bool)]
         if grid_id != -1:
             unvisited_squares = unvisited_squares[unvisited_squares['grid_id'] == grid_id]
         
@@ -296,7 +296,7 @@ class Ptolemy_AL:
         # or hole_ids (run only on these hole ids) or square ids (run on all unvisited holes with these square ids) TODO implement this
 
         # do the same thing as run_lm but for mm
-        visited_holes = self.current_mm_state[(self.current_mm_state['visited'])].dropna(subset=['features', 'ctf', 'ice_thickness'])
+        visited_holes = self.current_mm_state[(self.current_mm_state['visited']).astype(bool)].dropna(subset=['features', 'ctf', 'ice_thickness'])
 
         if len(visited_holes) > 1:
             train_x = torch.tensor(np.stack(visited_holes['features'].values)).float()
@@ -306,7 +306,7 @@ class Ptolemy_AL:
                 historical_train_x = []
                 historical_train_y = []
                 for mm_state in self.historical_mm_state:
-                    visited_holes = mm_state[(mm_state['visited'])].dropna(subset=['features', 'ctf', 'ice_thickness'])
+                    visited_holes = mm_state[(mm_state['visited']).astype(bool)].dropna(subset=['features', 'ctf', 'ice_thickness'])
                     historical_train_x.append(torch.tensor(np.stack(visited_holes['features'].values)).float())
                     historical_train_y.append(torch.tensor(np.stack(visited_holes[['ice_thickness', 'ctf']].values).astype('float')).float())
 
@@ -349,7 +349,7 @@ class Ptolemy_AL:
         elif square_ids:
             holes_to_run = self.current_mm_state[self.current_mm_state['square_id'].isin(square_ids)]
         else:
-            holes_to_run = self.current_mm_state[~self.current_mm_state['visited']]      
+            holes_to_run = self.current_mm_state[~self.current_mm_state['visited'].astype(bool)]      
                 
         unvisited_hole_features = torch.tensor(np.stack(holes_to_run['features'].values)).float().to(self.device)
 
