@@ -25,6 +25,23 @@ Images and visualization are handled by the `Exposure` class in `ptolemy/images.
 ## Future
 We plan to improve Ptolemy with active learning on individual data collection sessions, support for tilted grids, and superresolution (unbinned) medium-mag images.
 
+## Installation 
+
+Ptolemy can be installed within a [conda](https://docs.conda.io/projects/miniconda/en/latest/) environment by running the following commands:
+
+```
+conda create -n ptolemy python=3.9 pytorch torchvision numpy pandas scipy scikit-learn matplotlib scikit-image
+conda activate ptolemy
+cd /tmp
+git clone https://github.com/SMLC-NYSBC/ptolemy.git
+cd /tmp/ptolemy
+chmod +x *.py
+mv *.py $CONDA_PREFIX/bin
+mv weights $CONDA_PREFIX/bin
+# Puts the module into the search path
+mv ptolemy $CONDA_PREFIX/lib/python3.9/site-packages
+```
+
 ## Dependencies
 Tested with python 3.9
 
