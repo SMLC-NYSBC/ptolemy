@@ -19,6 +19,7 @@ from skimage.transform import hough_circle, hough_circle_peaks, rescale
 from skimage.draw import disk
 
 from PoissonMixture import PoissonMixture
+from sklearn.mixture import GaussianMixture
 from algorithms import flood_segments, grid_from_centroids, best_rot_angle
 import geometry as geom
 from PointSet import PointSet2D
@@ -95,7 +96,7 @@ class Ptolemy:
     ############# Low Mag Processing Functions ############
 
     def get_lm_crops(self, lm_image):
-        mask, segments = self._segment_lm(lm_image)
+        mask, segments = self._segment_lm_poisson(lm_image)
         polygons = geom.segments_to_polygons(segments)
         
         polygons, segment_indices = self._filter_polygon_areas(polygons)
@@ -117,11 +118,25 @@ class Ptolemy:
         center_coords = np.round(center_coords.as_matrix_y()).astype(int).tolist()
         
         return crops, preprocessed_crops, center_coords, vertices, areas, mean_intensities
-
-
+    
     def _segment_lm(self, lm_image):
+        gmm = GaussianMixture(2)
+        
+        original_shape = lm_image.shape
+        reshaped_image = lm_image.reshape(-1, 1)
+        
+        mask = gmm.fit_predict(reshaped_image).reshape(original_shape)
+        segments, _ = flood_segments(mask, self.settings['lm_segment_search_size'])
+        return mask, segments
+
+
+    def _segment_lm_poisson(self, lm_image):
         pmm = PoissonMixture()
-        pmm.fit(lm_image.astype(int), verbose=False)
+        img_for_pmm = np.copy(lm_image)
+        
+        if img_for_pmm.min() < 0:
+            img_for_pmm = img_for_pmm + abs(img_for_pmm.min())
+        pmm.fit(img_for_pmm.astype(int), verbose=False)
         mask = pmm.mask
 
         segments, _ = flood_segments(mask, self.settings['lm_segment_search_size'])
@@ -152,7 +167,7 @@ class Ptolemy:
     def _filter_crop_size(self, crops, boxes, segment_indices):
         ret_crops, ret_boxes, ret_segment_indices = [], [], []
         for crop, box, index in zip(crops, boxes, segment_indices):
-            if crop.shape[0] < self.settings['lm_square_min_width'] or crop.shape[1] < self.settings['lm_square_min_width']:
+            if crop.shape[0] < self.settings['lm_square_min_width'] or crop.shape[1] < self.settings['lm_square_min_width'] or crop.shape[0] > self.settings['lm_square_max_width'] or crop.shape[1] > self.settings['lm_square_max_width']:
                 continue
             ret_crops.append(crop)
             ret_boxes.append(box)

@@ -5,7 +5,7 @@ from ptolemy.PointSet import PointSet2D
 
 
 # TODO add functionalty for visualizing radii, 
-def viz_lm_image(image, boxes=None, scores=None, operator_selections=None, centers=None):
+def viz_lm_image(image, boxes=None, scores=None, operator_selections=None, centers=None, print_scores=False):
     # Assumes boxes is a list of pointsets, should probably set that if it's not, or rationalize this generally
     # also assumes operator_selections is a pointset
 
@@ -48,6 +48,12 @@ def viz_lm_image(image, boxes=None, scores=None, operator_selections=None, cente
 
     if centers is not None:
         plt.scatter(centers[:, 0], centers[:, 1])
+        
+    if scores is not None and print_scores:
+        center_x = centers[:, 0]
+        center_y = centers[:, 1]
+        for cx, cy, score in zip(center_x, center_y, scores):
+            plt.text(cx, cy, round(score, 2), bbox=dict(boxstyle='round', facecolor='white'))
 
 
 def viz_mm_image(image, centers=None, radii=None, scores=None, operator_selections=None, print_scores=False):

@@ -177,26 +177,31 @@ def process_stateless_lm(data: image):
     """
     Process a low-mag image and return everything that the old CLI would have returned plus features and prior scores
     """
-    image = np.array(data.image)
+    try:   
+        image = np.array(data.image)
 
-    # check shapes
+        # check shapes
 
-    raw_crops, centers, vertices, areas, mean_intensities, features, prior_scores = base_model.process_lm_image(image)
+        raw_crops, centers, vertices, areas, mean_intensities, features, prior_scores = base_model.process_lm_image(image)
 
-    order = np.argsort(prior_scores)[::-1]
-    js = []
-    for i in order:
-        d = {}
-        d['vertices'] = vertices[i]
-        d['center'] = centers[i]
-        d['area'] = float(areas[i])
-        d['brightness'] = float(mean_intensities[i])
-        d['score'] = float(prior_scores[i])
-        d['features'] = features[i].tolist()
+        order = np.argsort(prior_scores)[::-1]
+        js = []
+        for i in order:
+            d = {}
+            d['vertices'] = vertices[i]
+            d['center'] = centers[i]
+            d['area'] = float(areas[i])
+            d['brightness'] = float(mean_intensities[i])
+            d['score'] = float(prior_scores[i])
+            d['features'] = features[i].tolist()
 
-        js.append(d)
+            js.append(d)
+
+        return js
     
-    return js
+    except Exception as e:
+        print(f"Error in process_stateless_lm: {str(e)}")
+        return []
 
 
 @app.post('/process_stateless_mm')
@@ -309,6 +314,7 @@ def rerun_mm_on_arbitrary_holes(data: list_of_ints):
 @app.post('/push_lm')
 def push_lm(data: lm_image): 
     image = np.array(data.image)
+    np.save('/h2/pkim/test_image_{}_{}.npy'.format(data.grid_id, data.tile_id), image)
 
     # check shapes here
 

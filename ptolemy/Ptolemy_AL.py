@@ -289,7 +289,6 @@ class Ptolemy_AL:
             unvisited_squares['GP_probs'] = ucb_probs
 
         return unvisited_squares
-
     
     def run_mm_gp(self, candidate_holes=None, hole_ids=None, square_ids=None, save_candidate_holes=False, active=False):
         # either run on all holes (all none) or candidate holes (you pass me the holes to run on)
@@ -430,4 +429,71 @@ class Ptolemy_AL:
         Visited holes are automatically removed from the active holes set. 
         """
         self.active_holes = set(hole_ids)
+        
+        
+    def run_lm_gp_returnsample(self, grid_id=-1):
+        # Get visited squares
+        # Create ctf-based training set
+        # initially use ctf < 5 as cutoff - in the future, modify this to allow for multitask lm model
+        # Fit GP with set hyperparameters
+        # Predict unvisited squares, compute UCB probabilities
+        # return dataframe of unvisited squares with gp probabilities
+        assert len(self.current_lm_state) > 0, "must have pushed lm images"
+        
+        if len(self.current_mm_state) == 0:
+            unvisited_squares = self.current_lm_state[~self.current_lm_state['visited']]
+            if grid_id != -1:
+                unvisited_squares = unvisited_squares[unvisited_squares['grid_id'] == grid_id]
+            
+            unvisited_squares['GP_probs'] = 1 / len(unvisited_squares)
+            return unvisited_squares
+            
+        
 
+        train_x, train_y = [], []
+
+        visited_holes = self.current_mm_state[self.current_mm_state['visited']].dropna(subset=['features', 'ctf', 'ice_thickness'])
+        visited_squares = self.current_lm_state[self.current_lm_state['visited']].dropna(subset=['features'])
+                
+        for square_id, row in visited_squares.iterrows():
+            train_x.append(row.features)
+            holes = visited_holes[visited_holes.square_id == square_id]
+            counts = (holes.ctf < self.settings["lm_ctf_good_hole_cutoff"]).sum()
+            train_y.append(counts)
+
+        for lm_state, mm_state in zip(self.historical_lm_state, self.historical_mm_state):
+            for square_id, row in lm_state[lm_state['visited']].dropna(subset=['features']):
+                train_x.append(row.features)
+                visited_holes = mm_state[mm_state['visited']].dropna(subset=['features', 'ctf', 'ice_thickness'])
+                holes = visited_holes[visited_holes.square_id == square_id]
+                counts = (holes.ctf < self.settings["lm_ctf_good_hole_cutoff"]).sum()
+                train_y.append(counts)
+                
+        unvisited_squares = self.current_lm_state[~self.current_lm_state['visited']]
+        if grid_id != -1:
+            unvisited_squares = unvisited_squares[unvisited_squares['grid_id'] == grid_id]
+        
+        unvisited_square_features = torch.tensor(np.stack(unvisited_squares['features'].values)).float().to(self.device)
+        train_x = torch.tensor(np.stack(train_x)).float().to(self.device)
+        
+        # combined = torch.cat((train_x, unvisited_square_features))
+        # combined_mean = combined.mean(dim=0)
+        # combined_var = combined.var(dim=0)
+        
+        # unvisited_square_features = (unvisited_square_features - combined_mean) / combined_var
+        # train_x = (train_x - combined_mean) / combined_var
+        train_y = torch.tensor(train_y).float().to(self.device)
+
+        likelihood = gpytorch.likelihoods.GaussianLikelihood().float()
+        model = SingleTaskGP(train_x, train_y, likelihood).float()
+
+        model = self._set_lm_parameters(model)
+        model.eval().to(self.device)
+        likelihood.eval().to(self.device)
+
+        with torch.no_grad():
+            sample = likelihood(model(unvisited_square_features))
+            ucb_probs = upper_confidence_bound_v2(sample)
+            unvisited_squares['GP_probs'] = ucb_probs
+
+        return unvisited_squares, sample
