@@ -238,26 +238,8 @@ class Ptolemy_AL:
         
         return model
     
-    # def baseline_model_state_dict(self, train_x, train_y):
-    #     likelihood = gpytorch.likelihoods.GaussianLikelihood()
-    #     model = SingleTaskGP(train_x, train_y, likelihood)
-
-    #     model.mean_module.constant = torch.nn.Parameter(torch.tensor([float(self.settings['mean_constant'])])) # default should be 20 for now
-    #     model.covar_module.base_kernel.raw_lengthscale = torch.nn.Parameter(torch.quantile(train_x, q=0.25, dim=0).unsqueeze(0))
-    #     model.likelihood.noise_covar.raw_noise = torch.nn.Parameter(torch.tensor([float(self.settings['noise_constant'])])) # default should be 15
-    #     model.covar_module.outputscale = float(self.settings['outputscale']) # default should be 500
-
-    #     save_dict = model.state_dict()
-        
-    #     return save_dict
 
     def run_lm_gp(self, grid_id=-1):
-        # Get visited squares
-        # Create ctf-based training set
-        # initially use ctf < 5 as cutoff - in the future, modify this to allow for multitask lm model
-        # Fit GP with set hyperparameters
-        # Predict unvisited squares, compute UCB probabilities
-        # return dataframe of unvisited squares with gp probabilities
         assert len(self.current_lm_state) > 0, "must have pushed lm images"
         
         if len(self.current_mm_state) == 0:
@@ -295,13 +277,6 @@ class Ptolemy_AL:
         
         unvisited_square_features = torch.tensor(np.stack(unvisited_squares['features'].values)).float().to(self.device)
         train_x = torch.tensor(np.stack(train_x)).float().to(self.device)
-        
-        # combined = torch.cat((train_x, unvisited_square_features))
-        # combined_mean = combined.mean(dim=0)
-        # combined_var = combined.var(dim=0)
-        
-        # unvisited_square_features = (unvisited_square_features - combined_mean) / combined_var
-        # train_x = (train_x - combined_mean) / combined_var
         train_y = torch.tensor(train_y).float().to(self.device)
 
         likelihood = gpytorch.likelihoods.GaussianLikelihood().float()
@@ -320,10 +295,6 @@ class Ptolemy_AL:
 
     
     def run_mm_gp(self, candidate_holes=None, hole_ids=None, square_ids=None, save_candidate_holes=False, active=False):
-        # either run on all holes (all none) or candidate holes (you pass me the holes to run on)
-        # or hole_ids (run only on these hole ids) or square ids (run on all unvisited holes with these square ids) TODO implement this
-
-        # do the same thing as run_lm but for mm
         visited_holes = self.current_mm_state[(self.current_mm_state['visited']).astype(bool)].dropna(subset=['features', 'ctf', 'ice_thickness'])
 
         if len(visited_holes) > 1:
@@ -359,11 +330,7 @@ class Ptolemy_AL:
             model = self._set_mm_parameters(model)
             model = model.to(self.device)
             likelihood = likelihood.to(self.device)
-            # model = model.double()
-            # likelihood = likelihood.double()
-
-        # If candidate_holes is None, run the model on all unvisited holes
-        # Else, add candidate holes to mm_state and only run model on candidate holes
+            
         if candidate_holes:
             holes_to_run = candidate_holes
 
@@ -461,12 +428,6 @@ class Ptolemy_AL:
         
         
     def run_lm_gp_returnsample(self, grid_id=-1):
-        # Get visited squares
-        # Create ctf-based training set
-        # initially use ctf < 5 as cutoff - in the future, modify this to allow for multitask lm model
-        # Fit GP with set hyperparameters
-        # Predict unvisited squares, compute UCB probabilities
-        # return dataframe of unvisited squares with gp probabilities
         assert len(self.current_lm_state) > 0, "must have pushed lm images"
         
         if len(self.current_mm_state) == 0:
@@ -504,13 +465,6 @@ class Ptolemy_AL:
         
         unvisited_square_features = torch.tensor(np.stack(unvisited_squares['features'].values)).float().to(self.device)
         train_x = torch.tensor(np.stack(train_x)).float().to(self.device)
-        
-        # combined = torch.cat((train_x, unvisited_square_features))
-        # combined_mean = combined.mean(dim=0)
-        # combined_var = combined.var(dim=0)
-        
-        # unvisited_square_features = (unvisited_square_features - combined_mean) / combined_var
-        # train_x = (train_x - combined_mean) / combined_var
         train_y = torch.tensor(train_y).float().to(self.device)
 
         likelihood = gpytorch.likelihoods.GaussianLikelihood().float()
