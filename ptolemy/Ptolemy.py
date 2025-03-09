@@ -80,7 +80,7 @@ class Ptolemy:
 
     def process_lm_image(self, lm_image):
         raw_crops, preprocessed_crops, centers, vertices, areas, mean_intensities = self.get_lm_crops(lm_image) # TODO return boxes
-        features = self.get_lm_features(raw_crops)
+        features = self.get_lm_features(raw_crops, mean_intensities, areas)
         prior_scores = self.get_lm_prior_scores(preprocessed_crops, features)
         return raw_crops, centers, vertices, areas, mean_intensities, features, prior_scores
 
@@ -176,20 +176,21 @@ class Ptolemy:
         return ret_crops, ret_boxes, ret_segment_indices
 
 
-    def get_lm_features(self, crops):
+    def get_lm_features(self, crops, mean_intensities, areas):
         """
         Getting lm features from aggregate statistics of crop pixels
 
         TODO in the future maybe use the pixels rather than the crops
         """
         feats = []
-        for crop in crops:
+        for crop, intensity, area in zip(crops, mean_intensities, areas):
             feats.append(np.array([
-                np.mean(crop),
-                np.max(crop),
+                intensity,
+                # area
+                # np.max(crop),
                 # np.min(crop),
-                np.var(crop),
-                np.float32(crop.shape[0] * crop.shape[1]),
+                # np.var(crop),
+                # np.float32(crop.shape[0] * crop.shape[1]),
                 # np.float32(kurtosis(crop, axis=None)),
                 # np.float32(skew(crop, axis=None))
             ]))
@@ -284,7 +285,7 @@ class Ptolemy:
 
         preprocessed_image = (mm_image - mm_image.mean()) / mm_image.std()
 
-        mean = mm_image.mean()
+        mean = preprocessed_image.mean()
         
         if preprocessed_image.shape[0] not in allowed_dims:
             if preprocessed_image.shape[0] > allowed_dims[-1]:

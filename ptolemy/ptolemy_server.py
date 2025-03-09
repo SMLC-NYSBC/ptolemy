@@ -202,23 +202,23 @@ def clear_historical_state():
 
 @app.post('/initialize_new_session')
 def initialize_new_session(data: init_new_session):
-    call_id = log_call('initialize_new_session', 
+    call_id = log_call('initialize_new_session_spoof', 
                        new_state=data.new_state_path,
                        historical_states=data.historical_state_paths,
                        save_state=data.save_state_path)
     
-    al_model.initialize_new_session(data.new_state_path, 
-                                  data.historical_state_paths,
-                                  data.save_state_path)
-    base_model.update_noice_hole_intensity(-1)
-    save_current_state(call_id)
+    # al_model.initialize_new_session(data.new_state_path, 
+                                  # data.historical_state_paths,
+                                  # data.save_state_path)
+    # base_model.update_noice_hole_intensity(-1)
+    # save_current_state(call_id)
 
 @app.get('/initialize_new_session')
 def initialize_new_session():
-    call_id = log_call('initialize_new_session')
-    al_model.initialize_new_session()
-    base_model.update_noice_hole_intensity(-1)
-    save_current_state(call_id)
+    call_id = log_call('initialize_new_session_spoof')
+    # al_model.initialize_new_session()
+    # base_model.update_noice_hole_intensity(-1)
+    # save_current_state(call_id)
 
 
 @app.post('/append_current_state')
